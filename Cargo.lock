@@ -2277,6 +2277,7 @@ checksum = "afbdc74edc00b6f6a218ca6a5364d6226a259d4b8ea1af4a0ea063f27e179f4d"
 name = "qmx_ctrl"
 version = "0.1.0"
 dependencies = [
+ "eframe",
  "ui",
 ]
 
