@@ -1,9 +1,7 @@
 use eframe::egui;
 
-use crate::window_manager::WindowConfig;
-use crate::window_manager::WindowManager;
-use crate::window_manager::GLOBAL_WINDOW;
-use crate::window_manager::init_global_window;
+use crate::window_manager::*;
+
 /// 显示用户协议窗口（无参数调用）
 pub fn show_agreement_window() {
     init_global_window();
@@ -24,9 +22,15 @@ pub fn show_agreement_window() {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button("不同意").clicked() {
                 println!("用户不同意协议");
+                close_window();
             }
             if ui.button("同意").clicked() {
                 println!("用户同意协议");
+                close_window();
+            }
+            if ui.button("退出").clicked() {
+                println!("用户退出");
+                std::process::exit(0);
             }
         });
     };
@@ -44,5 +48,15 @@ pub fn show_agreement_window() {
 
     if let Some(global_window) = GLOBAL_WINDOW.get() {
         *global_window.lock().unwrap() = Some(window);
+    }
+}
+
+fn close_window() {
+    if let Some(global_window) = GLOBAL_WINDOW.get().cloned() {
+        let mut guard = global_window.lock().unwrap();
+        if let Some(window) = guard.as_mut() {
+            window.set_visible(false);
+        }
+        *guard = None;
     }
 }

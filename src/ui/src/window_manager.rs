@@ -81,19 +81,15 @@ impl WindowManager {
     }
 }
 
-/// 设置自定义字体：确保字体路径正确（相对于项目根目录）
 pub fn setup_fonts(ctx: &egui::Context) {
     if INITIALIZED.get().is_none() {
         let mut fonts = egui::FontDefinitions::default();
-
-        // 加载中文字体（确保 resources/NotoSerifCJKsc-SemiBold.otf 存在）
         fonts.font_data.insert(
             "noto_sans".to_string(),
             egui::FontData::from_static(include_bytes!("../resources/NotoSerifCJKsc-SemiBold.otf"))
                 .into(),
         );
 
-        // 设置默认字体族
         fonts
             .families
             .get_mut(&egui::FontFamily::Proportional)

@@ -31,11 +31,11 @@ fn main() {
     init_global_window();
     println!("hello");
     show_agreement_window();
-     // 启动 GUI 应用
     let options = eframe::NativeOptions::default();
     let _ = eframe::run_native(
         "管理工具",
         options,
         Box::new(|_cc| Ok(Box::new(MyApplication::default()))),
     );
+    
 }
