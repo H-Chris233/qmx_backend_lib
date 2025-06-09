@@ -33,9 +33,9 @@ fn main() {
     show_agreement_window();
      // 启动 GUI 应用
     let options = eframe::NativeOptions::default();
-    eframe::run_native(
-        "用户协议示例",
+    let _ = eframe::run_native(
+        "管理工具",
         options,
-        Box::new(|_cc| Box::new(MyApplication::default())),
+        Box::new(|_cc| Ok(Box::new(MyApplication::default()))),
     );
 }
