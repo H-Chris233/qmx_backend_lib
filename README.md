@@ -1,2 +1,2 @@
-# qmx_ctrl
-Control app for QMX
+# qmx_backend_lib
+Backend lib for QMX
