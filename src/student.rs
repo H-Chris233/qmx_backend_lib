@@ -18,6 +18,7 @@ pub struct Person {
     class: Class,
     rings: Vec<Vec<f64>>,
     note: String,
+    cash: (i32, i32),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -35,6 +36,7 @@ pub trait Student {
     fn set_lesson_left(&mut self, lesson: u32) -> &mut Self;
     fn add_ring(&mut self, ring: Vec<f64>) -> &mut Self;
     fn set_note(&mut self, note: String) -> &mut Self;
+    fn set_cash(&mut self, cash: (i32, i32)) -> &mut Self;
     unsafe fn set_id(&mut self, id: u64) -> &mut Self;
 
     fn uid(&self) -> u64;
@@ -44,6 +46,7 @@ pub trait Student {
     fn class(&self) -> &Class;
     fn rings(&self) -> &Vec<Vec<f64>>;
     fn note(&self) -> &str;
+    fn cash(&self) -> (i32, i32);
 }
 
 impl Student for Person {
@@ -111,7 +114,17 @@ impl Student for Person {
         self.uid = id;
         self
     }
-
+    
+    fn set_cash(&mut self, cash: (i32, i32)) -> &mut Self {
+        let old_cash = self.cash;
+        self.cash = cash;
+        debug!(
+            "Updated cash from {:?} to {:?} for {}",
+            old_cash, self.cash, self.name
+        );
+        self
+    }
+    
     fn uid(&self) -> u64 {
         self.uid
     }
@@ -139,6 +152,11 @@ impl Student for Person {
     fn note(&self) -> &str {
         &self.note
     }
+    
+    fn cash(&self) -> (i32, i32) {
+        self.cash
+    }
+    
 }
 
 impl Person {
@@ -152,6 +170,7 @@ impl Person {
             class: Class::Others,
             rings: Vec::new(),
             note: String::new(),
+            cash: (0, 0),
         };
         info!("Created new Person with UID: {}", new_person.uid);
         new_person
