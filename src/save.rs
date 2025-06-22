@@ -10,7 +10,6 @@ use log::{debug, info};
 /// 2. 保存数据库到磁盘
 ///
 /// 成功时返回 Ok(())，失败时返回包含上下文信息的错误字符串
-#[tauri::command]
 pub fn save(database: Database) -> Result<(), String> {
     // 记录调试日志：开始保存操作
     debug!("Starting database save operation");

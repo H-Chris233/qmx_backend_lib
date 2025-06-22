@@ -10,7 +10,6 @@ use log::{debug, info, warn};
 /// 2. 数据库模块初始化（从持久化存储加载）
 ///
 /// 成功返回完整数据库实例，失败返回带上下文的错误字符串
-#[tauri::command]
 pub fn init() -> Result<Database, String> {
     // 记录调试日志：初始化开始
     debug!("Starting system initialization sequence");

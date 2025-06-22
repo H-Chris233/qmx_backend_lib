@@ -3,12 +3,10 @@ use super::student::{Person, Student};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
-use std::path::PathBuf;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Database {
@@ -90,26 +88,5 @@ impl Database {
 
 pub fn init() -> Result<Database> {
     Database::read_from("./data/database.json")
-}
-
-pub fn get_data_path(app_handle: &AppHandle) -> Result<PathBuf> {
-    let mut path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| anyhow!("Failed to resolve app data directory: {}", e))?;
-
-    path.push("database.json");
-
-    Ok(path)
-}
-
-#[tauri::command]
-pub async fn get_database_path(app_handle: AppHandle) -> Result<String, String> {
-    let path = get_data_path(&app_handle)
-        .map_err(|e| e.to_string())?
-        .to_string_lossy()
-        .into_owned();
-
-    Ok(path)
 }
 
