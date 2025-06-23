@@ -1,7 +1,8 @@
-use std::cmp;
 use std::fs::File;
 use std::io::Write;
+use std::io::{BufReader, BufWriter};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::BTreeMap;
 
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
@@ -231,23 +232,81 @@ pub fn init() -> Result<()> {
     Ok(())
 }
 
-impl PartialEq for Person {
-    fn eq(&self, other: &Self) -> bool {
-        debug!("Comparing Person {} with UID {}", self.name, self.uid);
-        self.uid == other.uid
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StudentDatabase {
+    pub student_data: BTreeMap<u64, Person>,
+}
+
+impl StudentDatabase {
+    pub fn new() -> Self {
+        Self {
+            student_data: BTreeMap::new(),
+        }
+    }
+
+    pub fn from_json(json: &str) -> Result<Self> {
+        let deserialized = serde_json::from_str(json)
+            .with_context(|| "Failed to deserialize JSON into StudentDatabase")?;
+        debug!("Deserialized: {:?}", &deserialized);
+        Ok(deserialized)
+    }
+
+    pub fn insert(&mut self, person: Person) {
+        info!("Inserting person with UID: {}", person.uid());
+        self.student_data.insert(person.uid(), person);
+    }
+
+    pub fn json(&self) -> String {
+        serde_json::to_string(self)
+            .expect("Failed to serialize student database to JSON. This should never happen.")
+    }
+
+    pub fn get(&self, index: &u64) -> Option<&Person> {
+        self.student_data.get(index)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        self.save_to("./data/student_database.json")
+    }
+
+    pub fn save_to(&self, path: &str) -> Result<()> {
+        info!("Saving student database to {}", path);
+        let file =
+            File::create(path).with_context(|| format!("Failed to create file at '{}'", path))?;
+        let writer = BufWriter::new(file);
+        serde_json::to_writer(writer, self)
+            .with_context(|| format!("Failed to serialize and write student database to '{}'", path))
+    }
+
+    pub fn read_from(path: &str) -> Result<Self> {
+        info!("Loading student database from {}", path);
+        match File::open(path) {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+                serde_json::from_reader(reader)
+                    .with_context(|| format!("Failed to deserialize student database from '{}'", path))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                warn!(
+                    "Student database file not found at '{}', creating new database",
+                    path
+                );
+                Ok(Self::new())
+            }
+            Err(e) => Err(e).with_context(|| format!("Failed to open file at '{}'", path)),
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&u64, &Person)> + '_ {
+        self.student_data.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.student_data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.student_data.is_empty()
     }
 }
 
-impl Eq for Person {}
-
-impl PartialOrd for Person {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.uid.cmp(&other.uid))
-    }
-}
-
-impl Ord for Person {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.uid.cmp(&other.uid)
-    }
-}

@@ -1,4 +1,4 @@
-use super::{database::Database, student};
+use super::{database::Database, student, cash};
 
 use anyhow::{Context, Result};
 use log::{debug, info};
@@ -16,6 +16,10 @@ pub fn save(database: Database) -> Result<(), String> {
 
     // 保存 UID 计数器并转换错误类型为字符串
     student::save_uid()
+        .context("Failed to persist UID counter to storage")
+        .map_err(|e| e.to_string())?;
+        
+    cash::save_uid()
         .context("Failed to persist UID counter to storage")
         .map_err(|e| e.to_string())?;
 

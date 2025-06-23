@@ -1,92 +1,54 @@
-use super::student::{Person, Student};
 
-use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use super::student::StudentDatabase;
+use super::cash::CashDatabase;
 
 use anyhow::{Context, Result};
-use log::{debug, info, warn};
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+/// 运行时数据库容器，不持久化到磁盘
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Database {
-    data: BTreeMap<u64, Person>,
+    pub student: StudentDatabase,
+    pub cash: CashDatabase,
 }
 
 impl Database {
-    pub fn new() -> Self {
-        Self {
-            data: BTreeMap::new(),
-        }
+    /// 仅运行时构造方法
+    pub fn new(student: StudentDatabase, cash: CashDatabase) -> Self {
+        Self { student, cash }
     }
 
-    pub fn from_json(json: &str) -> Result<Self> {
-        let deserialized = serde_json::from_str(json)
-            .with_context(|| "Failed to deserialize JSON into Database")?;
-        debug!("Deserialized: {:?}", &deserialized);
-        Ok(deserialized)
-    }
-
-    pub fn insert(&mut self, person: Person) {
-        info!("Inserting person with UID: {}", person.uid());
-        self.data.insert(person.uid(), person);
-    }
-
-    pub fn json(&self) -> String {
-        serde_json::to_string(self)
-            .expect("Failed to serialize database to JSON. This should never happen.")
-    }
-
-    pub fn get(&self, index: &u64) -> Option<&Person> {
-        self.data.get(index)
-    }
-
+    /// 显式保存两个子数据库
     pub fn save(&self) -> Result<()> {
-        self.save_to("./data/database.json")
-    }
-
-    pub fn save_to(&self, path: &str) -> Result<()> {
-        info!("Saving database to {}", path);
-        let file =
-            File::create(path).with_context(|| format!("Failed to create file at '{}'", path))?;
-        let writer = BufWriter::new(file);
-        serde_json::to_writer(writer, self)
-            .with_context(|| format!("Failed to serialize and write database to '{}'", path))
-    }
-
-    pub fn read_from(path: &str) -> Result<Self> {
-        info!("Loading database from {}", path);
-        match File::open(path) {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                serde_json::from_reader(reader)
-                    .with_context(|| format!("Failed to deserialize database from '{}'", path))
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                warn!(
-                    "Database file not found at '{}', creating new database",
-                    path
-                );
-                Ok(Self::new())
-            }
-            Err(e) => Err(e).with_context(|| format!("Failed to open file at '{}'", path)),
-        }
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&u64, &Person)> + '_ {
-        self.data.iter()
-    }
-
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        info!("开始持久化所有数据库");
+        
+        // 分别保存两个子数据库
+        self.student.save()
+            .with_context(|| "学生数据库持久化失败")?;
+        self.cash.save()
+            .with_context(|| "现金数据库持久化失败")?;
+        
+        debug!("所有数据库已成功保存");
+        Ok(())
     }
 }
 
+/// 初始化运行时数据库容器
 pub fn init() -> Result<Database> {
-    Database::read_from("./data/database.json")
+    info!("正在初始化运行时数据库");
+
+    // 分别加载两个子数据库
+    let student_db = StudentDatabase::read_from("./data/student_database.json")
+        .with_context(|| "加载学生数据库失败")?;
+    
+    let cash_db = CashDatabase::read_from("./data/cash_database.json")
+        .with_context(|| "加载现金数据库失败")?;
+
+    info!("运行时数据库初始化完成");
+    Ok(Database::new(student_db, cash_db))
 }
 
+pub fn save(db: &Database) -> Result<()> {
+    db.save()
+}

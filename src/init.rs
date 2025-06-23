@@ -1,4 +1,4 @@
-use super::{database, database::Database, student};
+use super::{database, database::Database, student, cash};
 
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
@@ -19,6 +19,13 @@ pub fn init() -> Result<Database, String> {
         .context("Student module initialization failed during system startup")
         .map_err(|e| {
             warn!("Student module initialization failed: {:?}", e);
+            e.to_string()
+        })?;
+        
+    cash::init()
+        .context("Cash module initialization failed during system startup")
+        .map_err(|e| {
+            warn!("Cash module initialization failed: {:?}", e);
             e.to_string()
         })?;
 
