@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 
-pub static UID_COUNTER: AtomicU64 = AtomicU64::new(1);
+pub static STUDENT_UID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Person {
@@ -162,7 +162,7 @@ impl Student for Person {
 
 impl Person {
     pub fn new() -> Self {
-        let uid = UID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let uid = STUDENT_UID_COUNTER.fetch_add(1, Ordering::Relaxed);
         let new_person = Self {
             uid,
             age: 0,
@@ -209,7 +209,7 @@ pub fn load_saved_uid() -> Result<u64> {
 }
 
 pub fn save_uid() -> Result<()> {
-    let uid = UID_COUNTER.load(Ordering::Relaxed);
+    let uid = STUDENT_UID_COUNTER.load(Ordering::Relaxed);
     let path = "./data/uid_counter";
     let mut file =
         File::create(path).with_context(|| format!("Failed to create file '{}'", path))?;
@@ -224,7 +224,7 @@ pub fn save_uid() -> Result<()> {
 pub fn init() -> Result<()> {
     let saved_uid = load_saved_uid().context("Failed to load saved UID during initialization")?;
 
-    UID_COUNTER.store(saved_uid, Ordering::Relaxed);
+    STUDENT_UID_COUNTER.store(saved_uid, Ordering::Relaxed);
     info!("UID counter initialized to {}", saved_uid);
 
     save_uid().context("Failed to save initial UID to file")?;
