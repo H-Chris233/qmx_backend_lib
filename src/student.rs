@@ -77,7 +77,7 @@ impl Student for Person {
     }
 
     fn set_lesson_left(&mut self, lesson: u32) -> &mut Self {
-        if !self.lesson_left.is_some() {
+        if self.lesson_left.is_none() {
             warn!("尝试为非TenTry班级设置剩余课时: {}", self.name);
             return self;
         }
@@ -149,6 +149,12 @@ impl Student for Person {
 
     fn cash(&self) -> (i32, i32) {
         self.cash
+    }
+}
+
+impl Default for Person {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -226,6 +232,12 @@ pub fn init() -> Result<()> {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StudentDatabase {
     pub student_data: BTreeMap<u64, Person>,
+}
+
+impl Default for StudentDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StudentDatabase {

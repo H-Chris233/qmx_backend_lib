@@ -56,6 +56,12 @@ pub struct CashDatabase {
     pub cash_data: BTreeMap<u64, Cash>,
 }
 
+impl Default for CashDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CashDatabase {
     pub fn new() -> Self {
         Self {
