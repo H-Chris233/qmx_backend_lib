@@ -1,5 +1,4 @@
-
-use super::{database, database::Database, student, cash};
+use super::{cash, database, database::Database, student};
 
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
@@ -22,7 +21,7 @@ pub fn init() -> Result<Database, String> {
             warn!("学生模块初始化失败: {:?}", e);
             e.to_string()
         })?;
-        
+
     cash::init()
         .context("现金模块初始化失败（系统启动期间）")
         .map_err(|e| {

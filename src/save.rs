@@ -1,5 +1,4 @@
-
-use super::{database::Database, student, cash};
+use super::{cash, database::Database, student};
 
 use anyhow::{Context, Result};
 use log::{debug, info};
@@ -19,7 +18,7 @@ pub fn save(database: Database) -> Result<(), String> {
     student::save_uid()
         .context("无法将学生UID计数器持久化到存储")
         .map_err(|e| e.to_string())?;
-        
+
     cash::save_uid()
         .context("无法将现金UID计数器持久化到存储")
         .map_err(|e| e.to_string())?;

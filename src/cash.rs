@@ -1,9 +1,8 @@
-
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::collections::BTreeMap;
 
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
@@ -79,7 +78,8 @@ impl CashDatabase {
 
     pub fn save_to(&self, path: &str) -> Result<()> {
         info!("正在保存现金数据库到 {}", path);
-        let file = File::create(path).with_context(|| format!("无法创建路径为 '{}' 的文件", path))?;
+        let file =
+            File::create(path).with_context(|| format!("无法创建路径为 '{}' 的文件", path))?;
         let writer = BufWriter::new(file);
         serde_json::to_writer(writer, self)
             .with_context(|| format!("序列化并写入现金数据库到 '{}' 失败", path))
