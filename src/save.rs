@@ -1,4 +1,4 @@
-use super::{database::Database, student, cash};
+use super::{cash, database::Database, student};
 
 use anyhow::{Context, Result};
 use log::{debug, info};
@@ -12,24 +12,24 @@ use log::{debug, info};
 /// 成功时返回 Ok(())，失败时返回包含上下文信息的错误字符串
 pub fn save(database: Database) -> Result<(), String> {
     // 记录调试日志：开始保存操作
-    debug!("Starting database save operation");
+    debug!("开始数据库保存操作");
 
     // 保存 UID 计数器并转换错误类型为字符串
     student::save_uid()
-        .context("Failed to persist UID counter to storage")
+        .context("无法将学生UID计数器持久化到存储")
         .map_err(|e| e.to_string())?;
-        
+
     cash::save_uid()
-        .context("Failed to persist UID counter to storage")
+        .context("无法将现金UID计数器持久化到存储")
         .map_err(|e| e.to_string())?;
 
     // 保存数据库内容并转换错误类型为字符串
     database
         .save()
-        .context("Failed to persist student database to storage")
+        .context("无法将学生数据库持久化到存储")
         .map_err(|e| e.to_string())?;
 
     // 记录信息日志：保存成功
-    info!("Successfully completed database persistence operation");
+    info!("成功完成数据库持久化操作");
     Ok(())
 }

@@ -1,8 +1,8 @@
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::collections::BTreeMap;
 
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
@@ -29,7 +29,7 @@ impl Cash {
             student_id,
             cash: 0,
         };
-        info!("Created new Cash record with UID: {}", new_cash.uid);
+        info!("创建新的Cash记录，UID为: {}", new_cash.uid);
         new_cash
     }
 
@@ -70,7 +70,7 @@ impl CashDatabase {
     }
 
     pub fn insert(&mut self, cash: Cash) {
-        info!("Inserting cash record with UID: {}", cash.uid);
+        info!("插入现金记录，UID为: {}", cash.uid);
         self.cash_data.insert(cash.uid, cash);
     }
 
@@ -83,26 +83,27 @@ impl CashDatabase {
     }
 
     pub fn save_to(&self, path: &str) -> Result<()> {
-        info!("Saving cash database to {}", path);
-        let file = File::create(path).with_context(|| format!("Failed to create file at '{}'", path))?;
+        info!("正在保存现金数据库到 {}", path);
+        let file =
+            File::create(path).with_context(|| format!("无法创建路径为 '{}' 的文件", path))?;
         let writer = BufWriter::new(file);
         serde_json::to_writer(writer, self)
-            .with_context(|| format!("Failed to serialize and write cash database to '{}'", path))
+            .with_context(|| format!("序列化并写入现金数据库到 '{}' 失败", path))
     }
 
     pub fn read_from(path: &str) -> Result<Self> {
-        info!("Loading cash database from {}", path);
+        info!("从 {} 加载现金数据库", path);
         match File::open(path) {
             Ok(file) => {
                 let reader = BufReader::new(file);
                 serde_json::from_reader(reader)
-                    .with_context(|| format!("Failed to deserialize cash database from '{}'", path))
+                    .with_context(|| format!("反序列化路径为 '{}' 的现金数据库失败", path))
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                warn!("Cash database file not found at '{}', creating new database", path);
+                warn!("现金数据库文件未在路径 '{}' 中找到，创建新数据库", path);
                 Ok(Self::new())
             }
-            Err(e) => Err(e).with_context(|| format!("Failed to open file at '{}'", path)),
+            Err(e) => Err(e).with_context(|| format!("打开路径为 '{}' 的文件失败", path)),
         }
     }
 
@@ -164,25 +165,25 @@ pub fn load_saved_cash_uid() -> Result<u64> {
             let result = content
                 .trim()
                 .parse::<u64>()
-                .with_context(|| format!("Failed to parse CASH UID from file '{}'", path));
+                .with_context(|| format!("解析路径为 '{}' 的CASH UID失败", path));
             match &result {
                 Ok(uid) => {
-                    info!("Successfully loaded CASH UID: {}", uid);
+                    info!("成功加载CASH UID: {}", uid);
                     Ok(*uid)
                 }
                 Err(e) => {
-                    error!("Failed to parse CASH UID: {:?}", e);
+                    error!("解析CASH UID失败: {:?}", e);
                     Err(result.unwrap_err())
                 }
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            debug!("No existing CASH UID file found. Starting from default value 1");
+            debug!("未找到现有的CASH UID文件，从默认值1开始");
             Ok(1)
         }
         Err(e) => {
-            error!("Failed to read CASH UID file: {}", e);
-            Err(e).with_context(|| format!("Failed to read CASH UID file '{}'", path))
+            error!("读取CASH UID文件失败: {}", e);
+            Err(e).with_context(|| format!("读取路径为 '{}' 的CASH UID文件失败", path))
         }
     }
 }
@@ -191,20 +192,20 @@ pub fn load_saved_cash_uid() -> Result<u64> {
 pub fn save_uid() -> Result<()> {
     let uid = CASH_UID_COUNTER.load(Ordering::Relaxed);
     let path = "./data/cash_uid_counter";
-    let mut file = File::create(path).with_context(|| format!("Failed to create file '{}'", path))?;
+    let mut file = File::create(path).with_context(|| format!("无法创建文件 '{}'", path))?;
 
     file.write_all(uid.to_string().as_bytes())
-        .with_context(|| format!("Failed to write CASH UID to file '{}'", path))?;
+        .with_context(|| format!("写入CASH UID到文件 '{}' 失败", path))?;
 
-    debug!("Successfully saved CASH UID: {} to file", uid);
+    debug!("成功保存CASH UID: {} 到文件", uid);
     Ok(())
 }
 
 /// Cash 模块初始化函数
 pub fn init() -> Result<()> {
-    let saved_uid = load_saved_cash_uid().context("Failed to load saved CASH UID during initialization")?;
+    let saved_uid = load_saved_cash_uid().context("初始化期间加载已保存的CASH UID失败")?;
     CASH_UID_COUNTER.store(saved_uid, Ordering::Relaxed);
-    info!("CASH UID counter initialized to {}", saved_uid);
+    info!("CASH UID计数器初始化为 {}", saved_uid);
     Ok(())
 }
 
