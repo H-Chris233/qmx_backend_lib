@@ -56,6 +56,12 @@ pub struct CashDatabase {
     pub cash_data: BTreeMap<u64, Cash>,
 }
 
+impl Default for CashDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CashDatabase {
     pub fn new() -> Self {
         Self {
@@ -106,6 +112,47 @@ impl CashDatabase {
 
     pub fn len(&self) -> usize {
         self.cash_data.len()
+    }
+
+    /// 检查数据库是否为空
+    pub fn is_empty(&self) -> bool {
+        self.cash_data.is_empty()
+    }
+
+    /// 删除指定UID的现金记录
+    /// 
+    /// # 参数
+    /// * `uid` - 要删除的现金记录UID
+    /// 
+    /// # 返回值
+    /// 返回被删除的现金记录，如果不存在则返回None
+    pub fn remove(&mut self, uid: &u64) -> Option<Cash> {
+        info!("Removing cash record with UID: {}", uid);
+        let removed = self.cash_data.remove(uid);
+        if removed.is_some() {
+            info!("Successfully removed cash record with UID: {}", uid);
+        } else {
+            warn!("Attempted to remove non-existent cash record with UID: {}", uid);
+        }
+        removed
+    }
+
+    /// 批量删除现金记录
+    /// 
+    /// # 参数
+    /// * `uids` - 要删除的现金记录UID列表
+    /// 
+    /// # 返回值
+    /// 返回成功删除的现金记录数量
+    pub fn remove_batch(&mut self, uids: &[u64]) -> usize {
+        let mut removed_count = 0;
+        for &uid in uids {
+            if self.cash_data.remove(&uid).is_some() {
+                removed_count += 1;
+            }
+        }
+        info!("Batch removed {} cash records", removed_count);
+        removed_count
     }
 }
 
@@ -159,4 +206,77 @@ pub fn init() -> Result<()> {
     CASH_UID_COUNTER.store(saved_uid, Ordering::Relaxed);
     info!("CASH UID counter initialized to {}", saved_uid);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cash_creation() {
+        let cash = Cash::new(Some(123));
+        assert!(cash.uid > 0);
+        assert_eq!(cash.student_id, Some(123));
+        assert_eq!(cash.cash, 0);
+    }
+
+    #[test]
+    fn test_cash_modification() {
+        let mut cash = Cash::new(None);
+        
+        cash.add(100);
+        assert_eq!(cash.cash, 100);
+        
+        cash.set_cash(200);
+        assert_eq!(cash.cash, 200);
+        
+        cash.set_id(456);
+        assert_eq!(cash.student_id, Some(456));
+    }
+
+    #[test]
+    fn test_cash_database_crud() {
+        let mut db = CashDatabase::new();
+        
+        // 测试插入
+        let cash1 = Cash::new(Some(1));
+        let cash2 = Cash::new(Some(2));
+        let uid1 = cash1.uid;
+        let uid2 = cash2.uid;
+        
+        db.insert(cash1);
+        db.insert(cash2);
+        
+        assert_eq!(db.len(), 2);
+        assert!(!db.is_empty());
+        
+        // 测试查询
+        assert!(db.get(&uid1).is_some());
+        assert!(db.get(&uid2).is_some());
+        assert!(db.get(&999).is_none());
+        
+        // 测试删除
+        let removed = db.remove(&uid1);
+        assert!(removed.is_some());
+        assert_eq!(db.len(), 1);
+        assert!(db.get(&uid1).is_none());
+        
+        // 测试批量删除
+        let count = db.remove_batch(&[uid2, 999]);
+        assert_eq!(count, 1);
+        assert!(db.is_empty());
+    }
+
+    #[test]
+    fn test_cash_json_operations() {
+        let mut db = CashDatabase::new();
+        let cash = Cash::new(Some(123));
+        db.insert(cash);
+        
+        let json = serde_json::to_string(&db).unwrap();
+        assert!(!json.is_empty());
+        
+        let deserialized: CashDatabase = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.len(), 1);
+    }
 }

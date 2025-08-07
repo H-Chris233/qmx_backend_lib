@@ -17,12 +17,12 @@ pub struct Person {
     name: String,
     lesson_left: Option<u32>,
     class: Class,
-    rings: Vec<Vec<f64>>,
+    rings: Vec<f64>,
     note: String,
     cash: (i32, i32),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Class {
     TenTry,
     Month,
@@ -35,9 +35,14 @@ pub trait Student {
     fn set_name(&mut self, name: String) -> &mut Self;
     fn set_class(&mut self, class: Class) -> &mut Self;
     fn set_lesson_left(&mut self, lesson: u32) -> &mut Self;
-    fn add_ring(&mut self, ring: Vec<f64>) -> &mut Self;
+    fn add_ring(&mut self, ring: f64) -> &mut Self;
     fn set_note(&mut self, note: String) -> &mut Self;
     fn set_cash(&mut self, cash: (i32, i32)) -> &mut Self;
+    /// 强制设置UID，这可能会破坏数据一致性
+    /// 
+    /// # Safety
+    /// 此函数是unsafe的，因为它可能导致UID冲突，破坏数据一致性。
+    /// 调用者必须确保新的UID是唯一的且不会与现有记录冲突。
     unsafe fn set_id(&mut self, id: u64) -> &mut Self;
 
     fn uid(&self) -> u64;
@@ -45,7 +50,7 @@ pub trait Student {
     fn name(&self) -> &str;
     fn lesson_left(&self) -> Option<u32>;
     fn class(&self) -> &Class;
-    fn rings(&self) -> &Vec<Vec<f64>>;
+    fn rings(&self) -> &Vec<f64>;
     fn note(&self) -> &str;
     fn cash(&self) -> (i32, i32);
 }
@@ -77,7 +82,7 @@ impl Student for Person {
     }
 
     fn set_lesson_left(&mut self, lesson: u32) -> &mut Self {
-        if !self.lesson_left.is_some() {
+        if self.lesson_left.is_none() {
             warn!(
                 "Attempted to set remaining lessons for non-TenTry class: {}",
                 self.name
@@ -93,7 +98,7 @@ impl Student for Person {
         self
     }
 
-    fn add_ring(&mut self, ring: Vec<f64>) -> &mut Self {
+    fn add_ring(&mut self, ring: f64) -> &mut Self {
         info!("Added new ring measurement for {}", self.name);
         self.rings.push(ring);
         self
@@ -110,6 +115,11 @@ impl Student for Person {
         self
     }
 
+    /// 强制设置UID，这可能会破坏数据一致性
+    /// 
+    /// # Safety
+    /// 此函数是unsafe的，因为它可能导致UID冲突，破坏数据一致性。
+    /// 调用者必须确保新的UID是唯一的且不会与现有记录冲突。
     unsafe fn set_id(&mut self, id: u64) -> &mut Self {
         info!("Forcibly changing UID from {} to {}", self.uid, id);
         self.uid = id;
@@ -146,7 +156,7 @@ impl Student for Person {
         &self.class
     }
 
-    fn rings(&self) -> &Vec<Vec<f64>> {
+    fn rings(&self) -> &Vec<f64> {
         &self.rings
     }
 
@@ -158,6 +168,12 @@ impl Student for Person {
         self.cash
     }
     
+}
+
+impl Default for Person {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Person {
@@ -237,6 +253,12 @@ pub struct StudentDatabase {
     pub student_data: BTreeMap<u64, Person>,
 }
 
+impl Default for StudentDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StudentDatabase {
     pub fn new() -> Self {
         Self {
@@ -307,6 +329,121 @@ impl StudentDatabase {
 
     pub fn is_empty(&self) -> bool {
         self.student_data.is_empty()
+    }
+
+    /// 删除指定UID的学生记录
+    /// 
+    /// # 参数
+    /// * `uid` - 要删除的学生UID
+    /// 
+    /// # 返回值
+    /// 返回被删除的学生记录，如果不存在则返回None
+    pub fn remove(&mut self, uid: &u64) -> Option<Person> {
+        info!("Removing student with UID: {}", uid);
+        let removed = self.student_data.remove(uid);
+        if removed.is_some() {
+            info!("Successfully removed student with UID: {}", uid);
+        } else {
+            warn!("Attempted to remove non-existent student with UID: {}", uid);
+        }
+        removed
+    }
+
+    /// 批量删除学生记录
+    /// 
+    /// # 参数
+    /// * `uids` - 要删除的学生UID列表
+    /// 
+    /// # 返回值
+    /// 返回成功删除的学生数量
+    pub fn remove_batch(&mut self, uids: &[u64]) -> usize {
+        let mut removed_count = 0;
+        for &uid in uids {
+            if self.student_data.remove(&uid).is_some() {
+                removed_count += 1;
+            }
+        }
+        info!("Batch removed {} student records", removed_count);
+        removed_count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_person_creation() {
+        let person = Person::new();
+        assert!(person.uid() > 0);
+        assert_eq!(person.age(), 0);
+        assert_eq!(person.name(), "Default");
+        assert_eq!(person.class(), &Class::Others);
+        assert!(person.rings().is_empty());
+        assert_eq!(person.note(), "");
+        assert_eq!(person.cash(), (0, 0));
+    }
+
+    #[test]
+    fn test_person_modification() {
+        let mut person = Person::new();
+        
+        person.set_age(25)
+            .set_name("张三".to_string())
+            .set_class(Class::TenTry)
+            .set_note("测试学生".to_string());
+        
+        assert_eq!(person.age(), 25);
+        assert_eq!(person.name(), "张三");
+        assert_eq!(person.class(), &Class::TenTry);
+        assert_eq!(person.lesson_left(), Some(10));
+        assert_eq!(person.note(), "测试学生");
+    }
+
+    #[test]
+    fn test_student_database_crud() {
+        let mut db = StudentDatabase::new();
+        
+        // 测试插入
+        let person1 = Person::new();
+        let person2 = Person::new();
+        let uid1 = person1.uid();
+        let uid2 = person2.uid();
+        
+        db.insert(person1);
+        db.insert(person2);
+        
+        assert_eq!(db.len(), 2);
+        assert!(!db.is_empty());
+        
+        // 测试查询
+        assert!(db.get(&uid1).is_some());
+        assert!(db.get(&uid2).is_some());
+        assert!(db.get(&999).is_none());
+        
+        // 测试删除
+        let removed = db.remove(&uid1);
+        assert!(removed.is_some());
+        assert_eq!(db.len(), 1);
+        assert!(db.get(&uid1).is_none());
+        
+        // 测试批量删除
+        let count = db.remove_batch(&[uid2, 999]);
+        assert_eq!(count, 1);
+        assert!(db.is_empty());
+    }
+
+    #[test]
+    fn test_json_serialization() {
+        let mut db = StudentDatabase::new();
+        let person = Person::new();
+        db.insert(person);
+        
+        let json = db.json();
+        assert!(!json.is_empty());
+        
+        let deserialized = StudentDatabase::from_json(&json).unwrap();
+        assert_eq!(deserialized.len(), 1);
     }
 }
 
