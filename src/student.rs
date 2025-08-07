@@ -269,6 +269,35 @@ impl StudentDatabase {
         self.student_data.insert(person.uid(), person);
     }
 
+    pub fn insert_batch(&mut self, persons: Vec<Person>) -> usize {
+        let mut inserted_count = 0;
+        for person in persons {
+            let uid = person.uid();
+            info!("批量插入用户，UID: {}", uid);
+            self.student_data.insert(uid, person);
+            inserted_count += 1;
+        }
+        info!("批量插入 {} 个学生记录", inserted_count);
+        inserted_count
+    }
+
+    pub fn update_batch<F>(&mut self, uids: &[u64], mut update_fn: F) -> usize
+    where
+        F: FnMut(&mut Person) -> bool,
+    {
+        let mut updated_count = 0;
+        for &uid in uids {
+            if let Some(person) = self.student_data.get_mut(&uid) {
+                if update_fn(person) {
+                    info!("批量更新学生记录，UID: {}", uid);
+                    updated_count += 1;
+                }
+            }
+        }
+        info!("批量更新 {} 个学生记录", updated_count);
+        updated_count
+    }
+
     pub fn json(&self) -> String {
         serde_json::to_string(self).expect("将学生数据库序列化为JSON失败（此错误不应发生）")
     }
@@ -431,5 +460,49 @@ mod tests {
         
         let deserialized = StudentDatabase::from_json(&json).unwrap();
         assert_eq!(deserialized.len(), 1);
+    }
+
+    #[test]
+    fn test_batch_operations() {
+        let mut db = StudentDatabase::new();
+        
+        // 测试批量插入
+        let persons = vec![Person::new(), Person::new(), Person::new()];
+        let inserted_count = db.insert_batch(persons);
+        assert_eq!(inserted_count, 3);
+        assert_eq!(db.len(), 3);
+        
+        // 收集所有UID用于批量更新测试
+        let uids: Vec<u64> = db.iter().map(|(&uid, _)| uid).collect();
+        
+        // 测试批量更新 - 更新所有学生的年龄
+        let updated_count = db.update_batch(&uids, |person| {
+            person.set_age(25);
+            true
+        });
+        assert_eq!(updated_count, 3);
+        
+        // 验证更新结果
+        for &uid in &uids {
+            let person = db.get(&uid).unwrap();
+            assert_eq!(person.age(), 25);
+        }
+        
+        // 测试批量更新 - 只更新部分学生（条件更新）
+        let updated_count = db.update_batch(&uids, |person| {
+            if person.age() == 25 {
+                person.set_name("BatchUpdated".to_string());
+                true
+            } else {
+                false
+            }
+        });
+        assert_eq!(updated_count, 3);
+        
+        // 验证条件更新结果
+        for &uid in &uids {
+            let person = db.get(&uid).unwrap();
+            assert_eq!(person.name(), "BatchUpdated");
+        }
     }
 }

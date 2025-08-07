@@ -74,6 +74,18 @@ impl CashDatabase {
         self.cash_data.insert(cash.uid, cash);
     }
 
+    pub fn insert_batch(&mut self, cash_records: Vec<Cash>) -> usize {
+        let mut inserted_count = 0;
+        for cash in cash_records {
+            let uid = cash.uid;
+            info!("批量插入现金记录，UID: {}", uid);
+            self.cash_data.insert(uid, cash);
+            inserted_count += 1;
+        }
+        info!("批量插入 {} 个现金记录", inserted_count);
+        inserted_count
+    }
+
     pub fn get(&self, index: &u64) -> Option<&Cash> {
         self.cash_data.get(index)
     }
@@ -154,6 +166,23 @@ impl CashDatabase {
         }
         info!("Batch removed {} cash records", removed_count);
         removed_count
+    }
+
+    pub fn update_batch<F>(&mut self, uids: &[u64], mut update_fn: F) -> usize
+    where
+        F: FnMut(&mut Cash) -> bool,
+    {
+        let mut updated_count = 0;
+        for &uid in uids {
+            if let Some(cash) = self.cash_data.get_mut(&uid) {
+                if update_fn(cash) {
+                    info!("批量更新现金记录，UID: {}", uid);
+                    updated_count += 1;
+                }
+            }
+        }
+        info!("批量更新 {} 个现金记录", updated_count);
+        updated_count
     }
 }
 
@@ -279,5 +308,72 @@ mod tests {
         
         let deserialized: CashDatabase = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.len(), 1);
+    }
+
+    #[test]
+    fn test_batch_operations() {
+        let mut db = CashDatabase::new();
+        
+        // 测试批量插入
+        let cash_records = vec![Cash::new(None), Cash::new(None), Cash::new(None)];
+        let inserted_count = db.insert_batch(cash_records);
+        assert_eq!(inserted_count, 3);
+        assert_eq!(db.len(), 3);
+        
+        // 收集所有UID用于批量更新测试
+        let uids: Vec<u64> = db.iter().map(|(&uid, _)| uid).collect();
+        
+        // 测试批量更新 - 为所有现金记录添加金额
+        let updated_count = db.update_batch(&uids, |cash| {
+            cash.add(100);
+            true
+        });
+        assert_eq!(updated_count, 3);
+        
+        // 验证更新结果
+        for &uid in &uids {
+            let cash = db.get(&uid).unwrap();
+            assert_eq!(cash.cash, 100);
+        }
+        
+        // 测试批量更新 - 条件更新（只更新金额为100的记录）
+        let updated_count = db.update_batch(&uids, |cash| {
+            if cash.cash == 100 {
+                cash.set_cash(200);
+                true
+            } else {
+                false
+            }
+        });
+        assert_eq!(updated_count, 3);
+        
+        // 验证条件更新结果
+        for &uid in &uids {
+            let cash = db.get(&uid).unwrap();
+            assert_eq!(cash.cash, 200);
+        }
+        
+        // 测试批量更新 - 部分更新（只有一半的记录）
+        let updated_count = db.update_batch(&uids, |cash| {
+            if cash.uid % 2 == 0 {
+                cash.add(50);
+                true
+            } else {
+                false
+            }
+        });
+        // 计算偶数UID的数量（可能是1个或2个，取决于生成的UID）
+        let even_uid_count = uids.iter().filter(|&&uid| uid % 2 == 0).count();
+        assert_eq!(updated_count, even_uid_count);
+        
+        // 验证部分更新结果
+        for &uid in &uids {
+            let cash = db.get(&uid).unwrap();
+            if uid % 2 == 0 {
+                assert_eq!(cash.cash, 250); // 200 + 50
+            } else {
+                assert_eq!(cash.cash, 200); // 保持不变
+            }
+        }
     }
 }
