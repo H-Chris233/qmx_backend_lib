@@ -114,7 +114,7 @@ impl Student for Person {
     /// 此函数是unsafe的，因为它可能导致UID冲突，破坏数据一致性。
     /// 调用者必须确保新的UID是唯一的且不会与现有记录冲突。
     unsafe fn set_id(&mut self, id: u64) -> &mut Self {
-        info!("强制更改 UID 从 {} 到 {}", self.uid, id);
+        warn!("强制更改 UID 从 {} 到 {}", self.uid, id);
         self.uid = id;
         self
     }
