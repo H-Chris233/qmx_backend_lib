@@ -23,7 +23,8 @@ qmx_backend_lib/
 ├── cash.rs         # 现金管理模块
 ├── database.rs     # 数据库容器
 ├── init.rs         # 初始化协调器
-└── save.rs         # 持久化协调器
+├── save.rs         # 持久化协调器
+└── stats.rs        # 统计分析模块
 ```
 
 ## 学生管理模块 (student.rs)
@@ -157,6 +158,14 @@ let db_from_json = StudentDatabase::from_json(json_str)?;
 ```rust
 // 插入学生记录
 pub fn insert(&mut self, person: Person)
+
+// 批量插入学生记录
+pub fn insert_batch(&mut self, persons: Vec<Person>) -> usize
+
+// 批量更新学生记录
+pub fn update_batch<F>(&mut self, uids: &[u64], mut update_fn: F) -> usize
+where
+    F: FnMut(&mut Person) -> bool,
 
 // 根据 UID 获取学生记录
 pub fn get(&self, index: &u64) -> Option<&Person>
@@ -328,6 +337,14 @@ pub fn new() -> Self
 // 插入现金记录
 pub fn insert(&mut self, cash: Cash)
 
+// 批量插入现金记录
+pub fn insert_batch(&mut self, cash_records: Vec<Cash>) -> usize
+
+// 批量更新现金记录
+pub fn update_batch<F>(&mut self, uids: &[u64], mut update_fn: F) -> usize
+where
+    F: FnMut(&mut Cash) -> bool,
+
 // 根据 UID 获取现金记录
 pub fn get(&self, index: &u64) -> Option<&Cash>
 
@@ -402,9 +419,10 @@ pub fn init() -> Result<()>
 ### Database 结构体
 
 ```rust
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Database {
-    pub student_db: StudentDatabase,
-    pub cash_db: CashDatabase,
+    pub student: StudentDatabase,
+    pub cash: CashDatabase,
 }
 ```
 
@@ -427,22 +445,63 @@ pub fn load_all() -> Result<Self>
 
 ```rust
 // 初始化整个系统
-pub fn init_all() -> Result<()>
+pub fn init() -> Result<Database, String>
 ```
 
 **初始化顺序:**
 1. 初始化学生模块 (加载 UID 计数器)
 2. 初始化现金模块 (加载 UID 计数器)
-3. 初始化数据库容器 (加载数据)
+3. 初始化数据库容器 (从文件加载数据)
+
+**返回值:**
+- 成功时返回 `Database` 实例
+- 失败时返回错误字符串
 
 ## 持久化模块 (save.rs)
 
 ### 数据保存
 
 ```rust
-// 保存所有数据和计数器
-pub fn save_all() -> Result<()>
+// 保存数据库并更新 UID 计数器
+pub fn save(database: Database) -> Result<(), String>
 ```
+
+**功能:**
+1. 保存学生 UID 计数器到文件
+2. 保存现金 UID 计数器到文件
+3. 保存数据库内容到磁盘
+
+## 统计分析模块 (stats.rs)
+
+### DashboardStats 结构体
+
+```rust
+#[derive(serde::Serialize, Debug)]
+pub struct DashboardStats {
+    pub total_students: usize,        // 学生总数
+    pub total_revenue: i32,           // 总收入
+    pub total_expense: i32,           // 总支出
+    pub average_score: f64,           // 平均成绩
+    pub max_score: f64,              // 最高成绩
+    pub active_courses: usize,        // 活跃课程数量
+}
+```
+
+### 统计函数
+
+```rust
+// 获取仪表盘统计数据
+pub fn get_dashboard_stats(
+    student_db: &StudentDatabase,
+    cash_db: &CashDatabase
+) -> Result<DashboardStats>
+```
+
+**统计内容:**
+- 学生总数和课程类型分布
+- 财务收支统计（正数为收入，负数为支出）
+- 学生成绩分析（平均分、最高分）
+- 活跃课程类型数量（排除"Others"类型）
 
 ## 使用示例
 
@@ -453,10 +512,10 @@ use qmx_backend_lib::{Person, StudentDatabase, Class};
 
 fn main() -> anyhow::Result<()> {
     // 初始化系统
-    qmx_backend_lib::init_all()?;
+    let database = qmx_backend_lib::init()?;
     
-    // 创建数据库
-    let mut db = StudentDatabase::new();
+    // 使用数据库容器中的学生数据库
+    let mut student_db = database.student;
     
     // 创建学生
     let mut student1 = Person::new();
@@ -470,17 +529,17 @@ fn main() -> anyhow::Result<()> {
             .set_class(Class::Month);
     
     // 插入数据库
-    db.insert(student1);
-    db.insert(student2);
+    student_db.insert(student1);
+    student_db.insert(student2);
     
     // 查询学生
-    for (uid, student) in db.iter() {
-        println!("UID: {}, 姓名: {}, 年龄: {}", 
+    for (uid, student) in student_db.iter() {
+        println!("UID: {}, 姓名: {}, 年龄: {}",
                  uid, student.name(), student.age());
     }
     
     // 保存数据
-    db.save()?;
+    qmx_backend_lib::save(database)?;
     
     Ok(())
 }
@@ -493,10 +552,10 @@ use qmx_backend_lib::{Cash, CashDatabase};
 
 fn main() -> anyhow::Result<()> {
     // 初始化系统
-    qmx_backend_lib::init_all()?;
+    let database = qmx_backend_lib::init()?;
     
-    // 创建数据库
-    let mut db = CashDatabase::new();
+    // 使用数据库容器中的现金数据库
+    let mut cash_db = database.cash;
     
     // 创建现金记录
     let mut cash1 = Cash::new(Some(123));  // 关联学生 UID 123
@@ -506,25 +565,25 @@ fn main() -> anyhow::Result<()> {
     cash2.add(500);
     
     // 插入数据库
-    db.insert(cash1);
-    db.insert(cash2);
+    cash_db.insert(cash1);
+    cash_db.insert(cash2);
     
     // 查询记录
-    for (uid, cash) in db.iter() {
+    for (uid, cash) in cash_db.iter() {
         match cash.student_id {
             Some(student_id) => {
-                println!("UID: {}, 学生ID: {}, 金额: {}", 
+                println!("UID: {}, 学生ID: {}, 金额: {}",
                          uid, student_id, cash.cash);
             }
             None => {
-                println!("UID: {}, 独立记录, 金额: {}", 
+                println!("UID: {}, 独立记录, 金额: {}",
                          uid, cash.cash);
             }
         }
     }
     
     // 保存数据
-    db.save()?;
+    qmx_backend_lib::save(database)?;
     
     Ok(())
 }
@@ -533,7 +592,7 @@ fn main() -> anyhow::Result<()> {
 ### 批量操作示例
 
 ```rust
-use qmx_backend_lib::{Person, StudentDatabase};
+use qmx_backend_lib::{Person, StudentDatabase, Class};
 
 fn main() -> anyhow::Result<()> {
     let mut db = StudentDatabase::new();
@@ -543,13 +602,22 @@ fn main() -> anyhow::Result<()> {
     for i in 0..10 {
         let mut student = Person::new();
         student.set_name(format!("学生{}", i))
-                .set_age(20 + i as u8);
+                .set_age(20 + i as u8)
+                .set_class(Class::Month);
         students.push(student);
     }
     
-    for student in students {
-        db.insert(student);
-    }
+    // 使用批量插入方法
+    let inserted_count = db.insert_batch(students);
+    println!("批量插入了 {} 个学生记录", inserted_count);
+    
+    // 批量更新 - 为所有学生添加成绩
+    let uids: Vec<u64> = db.iter().map(|(&uid, _)| uid).collect();
+    let updated_count = db.update_batch(&uids, |student| {
+        student.add_ring(85.0 + (student.uid() % 10) as f64);
+        true
+    });
+    println!("批量更新了 {} 个学生记录", updated_count);
     
     // 批量删除
     let uids_to_remove: Vec<u64> = db.iter()
@@ -674,10 +742,10 @@ fn safe_student_operations() -> Result<()> {
 
 ```rust
 // 应用启动时初始化
-qmx_backend_lib::init_all()?;
+let database = qmx_backend_lib::init()?;
 
 // 应用关闭时保存
-qmx_backend_lib::save_all()?;
+qmx_backend_lib::save(database)?;
 ```
 
 ### 2. 错误处理
@@ -746,8 +814,12 @@ cargo test cash::tests
 ## 版本信息
 
 - **当前版本**: 0.1.0
-- **最低 Rust 版本**: 1.56.0
-- **依赖版本**: 查看 Cargo.toml 文件
+- **最低 Rust 版本**: 2024 edition
+- **依赖版本**:
+  - anyhow = "1.0.98"
+  - log = "0.4.27"
+  - serde = { version = "1.0.219", features = ["derive"] }
+  - serde_json = "1.0.140"
 
 ## 贡献指南
 
@@ -769,6 +841,30 @@ cargo test cash::tests
 - Issues: [GitHub Issues 链接]
 - 文档: [项目文档链接]
 
+### 统计分析示例
+
+```rust
+use qmx_backend_lib::{Person, Cash, Class};
+
+fn main() -> anyhow::Result<()> {
+    // 初始化系统
+    let database = qmx_backend_lib::init()?;
+    
+    // 获取统计数据
+    let stats = qmx_backend_lib::get_dashboard_stats(&database.student, &database.cash)?;
+    
+    println!("=== 仪表盘统计 ===");
+    println!("学生总数: {}", stats.total_students);
+    println!("总收入: {}", stats.total_revenue);
+    println!("总支出: {}", stats.total_expense);
+    println!("平均成绩: {:.2}", stats.average_score);
+    println!("最高成绩: {:.2}", stats.max_score);
+    println!("活跃课程: {}", stats.active_courses);
+    
+    Ok(())
+}
+```
+
 ---
 
-*最后更新: 2025-08-07*
+*最后更新: 2025-08-17*
