@@ -23,7 +23,7 @@ pub struct Cash {
 
 impl Cash {
     pub fn new(student_id: Option<u64>) -> Self {
-        let uid = CASH_UID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let uid = CASH_UID_COUNTER.fetch_add(1, Ordering::SeqCst);
         let new_cash = Self {
             uid,
             student_id,
@@ -219,7 +219,7 @@ pub fn load_saved_cash_uid() -> Result<u64> {
 
 /// 保存 Cash UID 计数器
 pub fn save_uid() -> Result<()> {
-    let uid = CASH_UID_COUNTER.load(Ordering::Relaxed);
+    let uid = CASH_UID_COUNTER.load(Ordering::SeqCst);
     let path = "./data/cash_uid_counter";
     let mut file = File::create(path).with_context(|| format!("无法创建文件 '{}'", path))?;
 
@@ -233,7 +233,7 @@ pub fn save_uid() -> Result<()> {
 /// Cash 模块初始化函数
 pub fn init() -> Result<()> {
     let saved_uid = load_saved_cash_uid().context("初始化期间加载已保存的CASH UID失败")?;
-    CASH_UID_COUNTER.store(saved_uid, Ordering::Relaxed);
+    CASH_UID_COUNTER.store(saved_uid, Ordering::SeqCst);
     info!("CASH UID计数器初始化为 {}", saved_uid);
     Ok(())
 }

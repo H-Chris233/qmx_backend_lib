@@ -170,7 +170,7 @@ impl Default for Person {
 
 impl Person {
     pub fn new() -> Self {
-        let uid = STUDENT_UID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let uid = STUDENT_UID_COUNTER.fetch_add(1, Ordering::SeqCst);
         let new_person = Self {
             uid,
             age: 0,
@@ -217,7 +217,7 @@ pub fn load_saved_uid() -> Result<u64> {
 }
 
 pub fn save_uid() -> Result<()> {
-    let uid = STUDENT_UID_COUNTER.load(Ordering::Relaxed);
+    let uid = STUDENT_UID_COUNTER.load(Ordering::SeqCst);
     let path = "./data/uid_counter";
     let mut file = File::create(path).with_context(|| format!("无法创建文件 '{}'", path))?;
 
@@ -231,7 +231,7 @@ pub fn save_uid() -> Result<()> {
 pub fn init() -> Result<()> {
     let saved_uid = load_saved_uid().context("初始化期间加载已保存的UID失败")?;
 
-    STUDENT_UID_COUNTER.store(saved_uid, Ordering::Relaxed);
+    STUDENT_UID_COUNTER.store(saved_uid, Ordering::SeqCst);
     info!("UID计数器初始化为 {}", saved_uid);
 
     save_uid().context("初始化期间保存初始UID失败")?;
