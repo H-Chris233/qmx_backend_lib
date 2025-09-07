@@ -6,8 +6,8 @@ use anyhow::Result;
 #[derive(serde::Serialize, Debug)]
 pub struct DashboardStats {
     pub total_students: usize,
-    pub total_revenue: i32,
-    pub total_expense: i32,
+    pub total_revenue: i64,
+    pub total_expense: i64,
     pub average_score: f64,
     pub max_score: f64,
     pub active_courses: usize,

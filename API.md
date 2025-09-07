@@ -275,6 +275,7 @@ pub struct Cash {
     pub uid: u64,           // 现金记录的唯一标识符
     pub student_id: Option<u64>,  // 关联的学生 UID
     pub cash: i32,          // 金额
+    pub note: Option<String>, // 备注信息
 }
 ```
 
@@ -305,6 +306,12 @@ pub fn set_cash(&mut self, num: i32)
 
 // 设置关联的学生 ID
 pub fn set_id(&mut self, id: u64)
+
+// 设置备注信息
+pub fn set_note(&mut self, note: Option<String>)
+
+// 获取备注信息
+pub fn note(&self) -> Option<&str>
 ```
 
 **示例:**
@@ -313,6 +320,10 @@ let mut cash = Cash::new(Some(123));
 cash.add(100);      // 增加 100
 cash.set_cash(200); // 设置为 200
 cash.set_id(456);   // 关联到另一个学生
+cash.set_note(Some("学费".to_string())); // 添加备注
+if let Some(note) = cash.note() {
+    println!("备注: {}", note);
+}
 ```
 
 ### CashDatabase 结构体

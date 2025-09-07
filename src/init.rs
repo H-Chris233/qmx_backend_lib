@@ -11,6 +11,9 @@ use log::{debug, info, warn};
 ///
 /// 成功返回完整数据库实例，失败返回带上下文的错误字符串
 pub fn init() -> Result<Database, String> {
+
+    simple_logger::SimpleLogger::new().env().init().unwrap();
+
     // 记录调试日志：初始化开始
     debug!("开始系统初始化流程");
 

@@ -17,8 +17,10 @@ pub struct Cash {
     pub uid: u64,
     /// 关联的学生 UID
     pub student_id: Option<u64>,
-    /// 当前金额
-    pub cash: i32,
+    /// 金额
+    pub cash: i64,
+    /// 备注信息
+    pub note: Option<String>,
 }
 
 impl Cash {
@@ -28,16 +30,17 @@ impl Cash {
             uid,
             student_id,
             cash: 0,
+            note: None,
         };
         info!("创建新的Cash记录，UID为: {}", new_cash.uid);
         new_cash
     }
 
-    pub fn add(&mut self, num: i32) {
+    pub fn add(&mut self, num: i64) {
         self.cash += num;
     }
 
-    pub fn set_cash(&mut self, num: i32) {
+    pub fn set_cash(&mut self, num: i64) {
         self.cash = num;
     }
 
@@ -47,6 +50,16 @@ impl Cash {
         } else {
             self.student_id = Some(id)
         }
+    }
+    
+    /// 设置备注信息
+    pub fn set_note(&mut self, note: Option<String>) {
+        self.note = note;
+    }
+    
+    /// 获取备注信息
+    pub fn note(&self) -> Option<&str> {
+        self.note.as_deref()
     }
 }
 
