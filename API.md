@@ -837,9 +837,7 @@ cargo test cash::tests
 
 如有问题或建议，请通过以下方式联系：
 
-- 邮箱: [项目邮箱]
-- Issues: [GitHub Issues 链接]
-- 文档: [项目文档链接]
+- 邮箱: h-chris233@outlook.com
 
 ### 统计分析示例
 

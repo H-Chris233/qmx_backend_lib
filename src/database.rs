@@ -37,6 +37,8 @@ impl Database {
 pub fn init() -> Result<Database> {
     info!("正在初始化运行时数据库");
 
+    std::fs::create_dir_all("./data").with_context(|| "无法创建data目录")?;
+
     let student_db = match StudentDatabase::read_from("./data/student_database.json") {
         Ok(db) => {
             info!("学生数据库加载成功");

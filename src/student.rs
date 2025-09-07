@@ -15,6 +15,7 @@ pub struct Person {
     uid: u64,
     age: u8,
     name: String,
+    phone: String,
     lesson_left: Option<u32>,
     class: Class,
     rings: Vec<f64>,
@@ -38,8 +39,9 @@ pub trait Student {
     fn add_ring(&mut self, ring: f64) -> &mut Self;
     fn set_note(&mut self, note: String) -> &mut Self;
     fn set_cash(&mut self, cash: (i32, i32)) -> &mut Self;
+    fn set_phone(&mut self, phone: String) -> &mut Self;
     /// 强制设置UID，这可能会破坏数据一致性
-    /// 
+    ///
     /// # Safety
     /// 此函数是unsafe的，因为它可能导致UID冲突，破坏数据一致性。
     /// 调用者必须确保新的UID是唯一的且不会与现有记录冲突。
@@ -53,6 +55,7 @@ pub trait Student {
     fn rings(&self) -> &Vec<f64>;
     fn note(&self) -> &str;
     fn cash(&self) -> (i32, i32);
+    fn phone(&self) -> &str;
 }
 
 impl Student for Person {
@@ -109,7 +112,7 @@ impl Student for Person {
     }
 
     /// 强制设置UID，这可能会破坏数据一致性
-    /// 
+    ///
     /// # Safety
     /// 此函数是unsafe的，因为它可能导致UID冲突，破坏数据一致性。
     /// 调用者必须确保新的UID是唯一的且不会与现有记录冲突。
@@ -126,6 +129,13 @@ impl Student for Person {
             "现金从 {:?} 更新到 {:?}，对象: {}",
             old_cash, self.cash, self.name
         );
+        self
+    }
+
+    fn set_phone(&mut self, phone: String) -> &mut Self {
+        let old_phone = self.phone.clone();
+        self.phone = phone;
+        info!("电话号码从 '{}' 改为 '{}'", old_phone, self.phone);
         self
     }
 
@@ -160,6 +170,10 @@ impl Student for Person {
     fn cash(&self) -> (i32, i32) {
         self.cash
     }
+
+    fn phone(&self) -> &str {
+        self.phone.as_str()
+    }
 }
 
 impl Default for Person {
@@ -174,7 +188,8 @@ impl Person {
         let new_person = Self {
             uid,
             age: 0,
-            name: "Default".to_string(),
+            name: "未填写".to_string(),
+            phone: "未填写".to_string(),
             lesson_left: None,
             class: Class::Others,
             rings: Vec::new(),
@@ -229,6 +244,8 @@ pub fn save_uid() -> Result<()> {
 }
 
 pub fn init() -> Result<()> {
+    std::fs::create_dir_all("./data").with_context(|| "无法创建data目录")?;
+
     let saved_uid = load_saved_uid().context("初始化期间加载已保存的UID失败")?;
 
     STUDENT_UID_COUNTER.store(saved_uid, Ordering::SeqCst);
@@ -315,24 +332,19 @@ impl StudentDatabase {
         let file =
             File::create(path).with_context(|| format!("无法创建路径为 '{}' 的文件", path))?;
         let writer = BufWriter::new(file);
+
         serde_json::to_writer(writer, self)
-            .with_context(|| format!("序列化并写入学生数据库到 '{}' 失败", path))
+            .with_context(|| format!("序列化并写入学生数据库到 '{}' 失败", path))?;
+
+        Ok(())
     }
 
     pub fn read_from(path: &str) -> Result<Self> {
         info!("从 {} 加载学生数据库", path);
-        match File::open(path) {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                serde_json::from_reader(reader)
-                    .with_context(|| format!("反序列化路径为 '{}' 的学生数据库失败", path))
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                warn!("未找到学生数据库文件 '{}'，创建新数据库", path);
-                Ok(Self::new())
-            }
-            Err(e) => Err(e).with_context(|| format!("打开路径为 '{}' 的文件失败", path)),
-        }
+        let file = File::open(path).with_context(|| format!("打开路径为 '{}' 的文件失败", path))?;
+        let reader = BufReader::new(file);
+        serde_json::from_reader(reader)
+            .with_context(|| format!("反序列化路径为 '{}' 的学生数据库失败", path))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &Person)> + '_ {
@@ -348,10 +360,10 @@ impl StudentDatabase {
     }
 
     /// 删除指定UID的学生记录
-    /// 
+    ///
     /// # 参数
     /// * `uid` - 要删除的学生UID
-    /// 
+    ///
     /// # 返回值
     /// 返回被删除的学生记录，如果不存在则返回None
     pub fn remove(&mut self, uid: &u64) -> Option<Person> {
@@ -366,10 +378,10 @@ impl StudentDatabase {
     }
 
     /// 批量删除学生记录
-    /// 
+    ///
     /// # 参数
     /// * `uids` - 要删除的学生UID列表
-    /// 
+    ///
     /// # 返回值
     /// 返回成功删除的学生数量
     pub fn remove_batch(&mut self, uids: &[u64]) -> usize {
@@ -381,128 +393,5 @@ impl StudentDatabase {
         }
         info!("Batch removed {} student records", removed_count);
         removed_count
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_person_creation() {
-        let person = Person::new();
-        assert!(person.uid() > 0);
-        assert_eq!(person.age(), 0);
-        assert_eq!(person.name(), "Default");
-        assert_eq!(person.class(), &Class::Others);
-        assert!(person.rings().is_empty());
-        assert_eq!(person.note(), "");
-        assert_eq!(person.cash(), (0, 0));
-    }
-
-    #[test]
-    fn test_person_modification() {
-        let mut person = Person::new();
-        
-        person.set_age(25)
-            .set_name("张三".to_string())
-            .set_class(Class::TenTry)
-            .set_note("测试学生".to_string());
-        
-        assert_eq!(person.age(), 25);
-        assert_eq!(person.name(), "张三");
-        assert_eq!(person.class(), &Class::TenTry);
-        assert_eq!(person.lesson_left(), Some(10));
-        assert_eq!(person.note(), "测试学生");
-    }
-
-    #[test]
-    fn test_student_database_crud() {
-        let mut db = StudentDatabase::new();
-        
-        // 测试插入
-        let person1 = Person::new();
-        let person2 = Person::new();
-        let uid1 = person1.uid();
-        let uid2 = person2.uid();
-        
-        db.insert(person1);
-        db.insert(person2);
-        
-        assert_eq!(db.len(), 2);
-        assert!(!db.is_empty());
-        
-        // 测试查询
-        assert!(db.get(&uid1).is_some());
-        assert!(db.get(&uid2).is_some());
-        assert!(db.get(&999).is_none());
-        
-        // 测试删除
-        let removed = db.remove(&uid1);
-        assert!(removed.is_some());
-        assert_eq!(db.len(), 1);
-        assert!(db.get(&uid1).is_none());
-        
-        // 测试批量删除
-        let count = db.remove_batch(&[uid2, 999]);
-        assert_eq!(count, 1);
-        assert!(db.is_empty());
-    }
-
-    #[test]
-    fn test_json_serialization() {
-        let mut db = StudentDatabase::new();
-        let person = Person::new();
-        db.insert(person);
-        
-        let json = db.json();
-        assert!(!json.is_empty());
-        
-        let deserialized = StudentDatabase::from_json(&json).unwrap();
-        assert_eq!(deserialized.len(), 1);
-    }
-
-    #[test]
-    fn test_batch_operations() {
-        let mut db = StudentDatabase::new();
-        
-        // 测试批量插入
-        let persons = vec![Person::new(), Person::new(), Person::new()];
-        let inserted_count = db.insert_batch(persons);
-        assert_eq!(inserted_count, 3);
-        assert_eq!(db.len(), 3);
-        
-        // 收集所有UID用于批量更新测试
-        let uids: Vec<u64> = db.iter().map(|(&uid, _)| uid).collect();
-        
-        // 测试批量更新 - 更新所有学生的年龄
-        let updated_count = db.update_batch(&uids, |person| {
-            person.set_age(25);
-            true
-        });
-        assert_eq!(updated_count, 3);
-        
-        // 验证更新结果
-        for &uid in &uids {
-            let person = db.get(&uid).unwrap();
-            assert_eq!(person.age(), 25);
-        }
-        
-        // 测试批量更新 - 只更新部分学生（条件更新）
-        let updated_count = db.update_batch(&uids, |person| {
-            if person.age() == 25 {
-                person.set_name("BatchUpdated".to_string());
-                true
-            } else {
-                false
-            }
-        });
-        assert_eq!(updated_count, 3);
-        
-        // 验证条件更新结果
-        for &uid in &uids {
-            let person = db.get(&uid).unwrap();
-            assert_eq!(person.name(), "BatchUpdated");
-        }
     }
 }

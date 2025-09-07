@@ -105,18 +105,20 @@ impl CashDatabase {
 
     pub fn read_from(path: &str) -> Result<Self> {
         info!("从 {} 加载现金数据库", path);
-        match File::open(path) {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                serde_json::from_reader(reader)
-                    .with_context(|| format!("反序列化路径为 '{}' 的现金数据库失败", path))
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                warn!("现金数据库文件未在路径 '{}' 中找到，创建新数据库", path);
-                Ok(Self::new())
-            }
-            Err(e) => Err(e).with_context(|| format!("打开路径为 '{}' 的文件失败", path)),
-        }
+        let file = File::open(path).with_context(|| format!("打开路径为 '{}' 的文件失败", path))?;
+        let reader = BufReader::new(file);
+        serde_json::from_reader(reader)
+            .with_context(|| format!("反序列化路径为 '{}' 的现金数据库失败", path))
+    }
+
+    /// 将数据库序列化为JSON字符串
+    pub fn json(&self) -> String {
+        serde_json::to_string(self).expect("将学生数据库序列化为JSON失败（此错误不应发生）")
+    }
+
+    /// 从JSON字符串反序列化数据库
+    pub fn from_json(json_str: &str) -> Result<Self> {
+        serde_json::from_str(json_str).with_context(|| "从JSON反序列化现金数据库失败")
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &Cash)> + '_ {
@@ -133,10 +135,10 @@ impl CashDatabase {
     }
 
     /// 删除指定UID的现金记录
-    /// 
+    ///
     /// # 参数
     /// * `uid` - 要删除的现金记录UID
-    /// 
+    ///
     /// # 返回值
     /// 返回被删除的现金记录，如果不存在则返回None
     pub fn remove(&mut self, uid: &u64) -> Option<Cash> {
@@ -145,16 +147,19 @@ impl CashDatabase {
         if removed.is_some() {
             info!("Successfully removed cash record with UID: {}", uid);
         } else {
-            warn!("Attempted to remove non-existent cash record with UID: {}", uid);
+            warn!(
+                "Attempted to remove non-existent cash record with UID: {}",
+                uid
+            );
         }
         removed
     }
 
     /// 批量删除现金记录
-    /// 
+    ///
     /// # 参数
     /// * `uids` - 要删除的现金记录UID列表
-    /// 
+    ///
     /// # 返回值
     /// 返回成功删除的现金记录数量
     pub fn remove_batch(&mut self, uids: &[u64]) -> usize {
@@ -232,9 +237,12 @@ pub fn save_uid() -> Result<()> {
 
 /// Cash 模块初始化函数
 pub fn init() -> Result<()> {
+    std::fs::create_dir_all("./data").with_context(|| "无法创建data目录")?;
+
     let saved_uid = load_saved_cash_uid().context("初始化期间加载已保存的CASH UID失败")?;
     CASH_UID_COUNTER.store(saved_uid, Ordering::SeqCst);
     info!("CASH UID计数器初始化为 {}", saved_uid);
+    save_uid()?;
     Ok(())
 }
 
@@ -253,13 +261,13 @@ mod tests {
     #[test]
     fn test_cash_modification() {
         let mut cash = Cash::new(None);
-        
+
         cash.add(100);
         assert_eq!(cash.cash, 100);
-        
+
         cash.set_cash(200);
         assert_eq!(cash.cash, 200);
-        
+
         cash.set_id(456);
         assert_eq!(cash.student_id, Some(456));
     }
@@ -267,30 +275,30 @@ mod tests {
     #[test]
     fn test_cash_database_crud() {
         let mut db = CashDatabase::new();
-        
+
         // 测试插入
         let cash1 = Cash::new(Some(1));
         let cash2 = Cash::new(Some(2));
         let uid1 = cash1.uid;
         let uid2 = cash2.uid;
-        
+
         db.insert(cash1);
         db.insert(cash2);
-        
+
         assert_eq!(db.len(), 2);
         assert!(!db.is_empty());
-        
+
         // 测试查询
         assert!(db.get(&uid1).is_some());
         assert!(db.get(&uid2).is_some());
         assert!(db.get(&999).is_none());
-        
+
         // 测试删除
         let removed = db.remove(&uid1);
         assert!(removed.is_some());
         assert_eq!(db.len(), 1);
         assert!(db.get(&uid1).is_none());
-        
+
         // 测试批量删除
         let count = db.remove_batch(&[uid2, 999]);
         assert_eq!(count, 1);
@@ -302,10 +310,10 @@ mod tests {
         let mut db = CashDatabase::new();
         let cash = Cash::new(Some(123));
         db.insert(cash);
-        
+
         let json = serde_json::to_string(&db).unwrap();
         assert!(!json.is_empty());
-        
+
         let deserialized: CashDatabase = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.len(), 1);
     }
@@ -313,29 +321,29 @@ mod tests {
     #[test]
     fn test_batch_operations() {
         let mut db = CashDatabase::new();
-        
+
         // 测试批量插入
         let cash_records = vec![Cash::new(None), Cash::new(None), Cash::new(None)];
         let inserted_count = db.insert_batch(cash_records);
         assert_eq!(inserted_count, 3);
         assert_eq!(db.len(), 3);
-        
+
         // 收集所有UID用于批量更新测试
         let uids: Vec<u64> = db.iter().map(|(&uid, _)| uid).collect();
-        
+
         // 测试批量更新 - 为所有现金记录添加金额
         let updated_count = db.update_batch(&uids, |cash| {
             cash.add(100);
             true
         });
         assert_eq!(updated_count, 3);
-        
+
         // 验证更新结果
         for &uid in &uids {
             let cash = db.get(&uid).unwrap();
             assert_eq!(cash.cash, 100);
         }
-        
+
         // 测试批量更新 - 条件更新（只更新金额为100的记录）
         let updated_count = db.update_batch(&uids, |cash| {
             if cash.cash == 100 {
@@ -346,13 +354,13 @@ mod tests {
             }
         });
         assert_eq!(updated_count, 3);
-        
+
         // 验证条件更新结果
         for &uid in &uids {
             let cash = db.get(&uid).unwrap();
             assert_eq!(cash.cash, 200);
         }
-        
+
         // 测试批量更新 - 部分更新（只有一半的记录）
         let updated_count = db.update_batch(&uids, |cash| {
             if cash.uid % 2 == 0 {
@@ -365,7 +373,7 @@ mod tests {
         // 计算偶数UID的数量（可能是1个或2个，取决于生成的UID）
         let even_uid_count = uids.iter().filter(|&&uid| uid % 2 == 0).count();
         assert_eq!(updated_count, even_uid_count);
-        
+
         // 验证部分更新结果
         for &uid in &uids {
             let cash = db.get(&uid).unwrap();

@@ -1,6 +1,6 @@
-use anyhow::Result;
-use crate::student::{StudentDatabase, Student};
 use crate::cash::CashDatabase;
+use crate::student::{Student, StudentDatabase};
+use anyhow::Result;
 
 /// 仪表盘统计数据结构
 #[derive(serde::Serialize, Debug)]
@@ -15,23 +15,23 @@ pub struct DashboardStats {
 
 /// 获取仪表盘统计数据
 pub fn get_dashboard_stats(
-    student_db: &StudentDatabase, 
-    cash_db: &CashDatabase
+    student_db: &StudentDatabase,
+    cash_db: &CashDatabase,
 ) -> Result<DashboardStats> {
     let mut total_revenue = 0;
     let mut total_expense = 0;
     let mut all_scores = Vec::new();
     let mut max_score = 0.0;
-    
+
     // 统计学生数量和课程类型
     let total_students = student_db.len();
     let mut class_types = std::collections::HashSet::new();
-    
+
     // 遍历所有学生数据
     for (_, student) in student_db.iter() {
         // 统计课程类型
         class_types.insert(format!("{:?}", student.class()));
-        
+
         // 收集所有成绩
         for &score in student.rings() {
             all_scores.push(score);
@@ -40,10 +40,13 @@ pub fn get_dashboard_stats(
             }
         }
     }
-    
+
     // 统计活跃课程类型数量（排除 Others）
-    let active_courses = class_types.iter().filter(|class| class.as_str() != "Others").count();
-    
+    let active_courses = class_types
+        .iter()
+        .filter(|class| class.as_str() != "Others")
+        .count();
+
     // 统计财务数据
     for (_, transaction) in cash_db.iter() {
         if transaction.cash >= 0 {
@@ -52,7 +55,7 @@ pub fn get_dashboard_stats(
             total_expense += transaction.cash.abs();
         }
     }
-    
+
     // 计算平均成绩
     let average_score = if all_scores.is_empty() {
         0.0
@@ -60,7 +63,7 @@ pub fn get_dashboard_stats(
         let sum: f64 = all_scores.iter().sum();
         sum / all_scores.len() as f64
     };
-    
+
     Ok(DashboardStats {
         total_students,
         total_revenue,
@@ -74,16 +77,16 @@ pub fn get_dashboard_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::student::{Person, Class};
     use crate::cash::Cash;
-    
+    use crate::student::{Class, Person};
+
     #[test]
     fn test_get_dashboard_stats_empty() {
         let student_db = StudentDatabase::new();
         let cash_db = CashDatabase::new();
-        
+
         let stats = get_dashboard_stats(&student_db, &cash_db).unwrap();
-        
+
         assert_eq!(stats.total_students, 0);
         assert_eq!(stats.total_revenue, 0);
         assert_eq!(stats.total_expense, 0);
@@ -91,36 +94,40 @@ mod tests {
         assert_eq!(stats.max_score, 0.0);
         assert_eq!(stats.active_courses, 0);
     }
-    
+
     #[test]
     fn test_get_dashboard_stats_with_data() {
         let mut student_db = StudentDatabase::new();
         let mut cash_db = CashDatabase::new();
-        
+
         // 添加测试学生
         let mut student1 = Person::new();
-        student1.set_name("张三".to_string()).set_class(Class::TenTry);
+        student1
+            .set_name("张三".to_string())
+            .set_class(Class::TenTry);
         student1.add_ring(8.5).add_ring(9.0);
-        
+
         let mut student2 = Person::new();
-        student2.set_name("李四".to_string()).set_class(Class::Month);
+        student2
+            .set_name("李四".to_string())
+            .set_class(Class::Month);
         student2.add_ring(7.5).add_ring(8.0).add_ring(9.5);
-        
+
         student_db.insert(student1);
         student_db.insert(student2);
-        
+
         // 添加测试财务记录
         let mut cash1 = Cash::new(Some(1));
         cash1.add(100);
-        
+
         let mut cash2 = Cash::new(None);
         cash2.add(-50);
-        
+
         cash_db.insert(cash1);
         cash_db.insert(cash2);
-        
+
         let stats = get_dashboard_stats(&student_db, &cash_db).unwrap();
-        
+
         assert_eq!(stats.total_students, 2);
         assert_eq!(stats.total_revenue, 100);
         assert_eq!(stats.total_expense, 50);
