@@ -20,7 +20,6 @@ pub struct Person {
     class: Class,
     rings: Vec<f64>,
     note: String,
-    cash: (i32, i32),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -38,7 +37,6 @@ pub trait Student {
     fn set_lesson_left(&mut self, lesson: u32) -> &mut Self;
     fn add_ring(&mut self, ring: f64) -> &mut Self;
     fn set_note(&mut self, note: String) -> &mut Self;
-    fn set_cash(&mut self, cash: (i32, i32)) -> &mut Self;
     fn set_phone(&mut self, phone: String) -> &mut Self;
     /// 强制设置UID，这可能会破坏数据一致性
     ///
@@ -54,7 +52,6 @@ pub trait Student {
     fn class(&self) -> &Class;
     fn rings(&self) -> &Vec<f64>;
     fn note(&self) -> &str;
-    fn cash(&self) -> (i32, i32);
     fn phone(&self) -> &str;
 }
 
@@ -122,16 +119,6 @@ impl Student for Person {
         self
     }
 
-    fn set_cash(&mut self, cash: (i32, i32)) -> &mut Self {
-        let old_cash = self.cash;
-        self.cash = cash;
-        debug!(
-            "现金从 {:?} 更新到 {:?}，对象: {}",
-            old_cash, self.cash, self.name
-        );
-        self
-    }
-
     fn set_phone(&mut self, phone: String) -> &mut Self {
         let old_phone = self.phone.clone();
         self.phone = phone;
@@ -167,10 +154,6 @@ impl Student for Person {
         &self.note
     }
 
-    fn cash(&self) -> (i32, i32) {
-        self.cash
-    }
-
     fn phone(&self) -> &str {
         self.phone.as_str()
     }
@@ -194,7 +177,7 @@ impl Person {
             class: Class::Others,
             rings: Vec::new(),
             note: String::new(),
-            cash: (0, 0),
+            // cash 字段已移除
         };
         info!("创建新用户，UID: {}", new_person.uid);
         new_person

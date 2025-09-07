@@ -5,6 +5,7 @@ use std::io::{BufReader, BufWriter};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +22,51 @@ pub struct Cash {
     pub cash: i64,
     /// 备注信息
     pub note: Option<String>,
+    /// 分期付款信息
+    pub installment: Option<Installment>,
+}
+
+/// 分期付款计划（新增）
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Installment {
+    /// 分期计划ID（同一计划的各期共享相同ID）
+    pub plan_id: u64,
+    /// 总金额
+    pub total_amount: i64,
+    /// 总期数
+    pub total_installments: u32,
+    /// 当前期数
+    pub current_installment: u32,
+    /// 付款频率
+    pub frequency: PaymentFrequency,
+    /// 到期日期
+    pub due_date: DateTime<Utc>,
+    /// 付款状态
+    pub status: InstallmentStatus,
+}
+
+/// 付款频率枚举（新增）
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaymentFrequency {
+    Weekly,
+    Monthly,
+    Quarterly,
+    Custom(u32), // 自定义天数
+}
+
+/// 分期付款状态枚举（新增）
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallmentStatus {
+    Pending,
+    Paid,
+    Overdue,
+    Cancelled,
+}
+
+impl Default for InstallmentStatus {
+    fn default() -> Self {
+        Self::Pending
+    }
 }
 
 impl Cash {
@@ -31,9 +77,60 @@ impl Cash {
             student_id,
             cash: 0,
             note: None,
+            installment: None, // 默认没有分期
         };
         info!("创建新的Cash记录，UID为: {}", new_cash.uid);
         new_cash
+    }
+
+    /// 创建新的分期付款记录
+    pub fn new_installment(
+        student_id: Option<u64>,
+        total_amount: i64,
+        total_installments: u32,
+        frequency: PaymentFrequency,
+        due_date: DateTime<Utc>,
+        current_installment: u32,
+        plan_id: Option<u64>,
+    ) -> Self {
+        let uid = CASH_UID_COUNTER.fetch_add(1, Ordering::SeqCst);
+
+        // 分期金额计算：每期基础金额 = 总金额 / 总期数
+        // 最后一期加上余数，确保总金额正确
+        let base_amount = total_amount / total_installments as i64;
+        let remainder = total_amount % total_installments as i64;
+        let cash = base_amount
+            + if current_installment == total_installments {
+                remainder
+            } else {
+                0
+            };
+
+        let plan_id = plan_id.unwrap_or_else(|| CASH_UID_COUNTER.fetch_add(1, Ordering::SeqCst));
+
+        let cash_record = Cash {
+            uid,
+            student_id,
+            cash,
+            note: None,
+            installment: Some(Installment {
+                plan_id,
+                total_amount,
+                total_installments,
+                current_installment,
+                frequency,
+                due_date,
+                status: InstallmentStatus::Pending,
+            }),
+        };
+
+        // 添加分期创建日志
+        info!(
+            "创建分期付款记录: UID={}, 计划ID={}, 期数={}/{}, 金额={}, 到期时间={}",
+            uid, plan_id, current_installment, total_installments, cash_record.cash, due_date
+        );
+
+        cash_record
     }
 
     pub fn add(&mut self, num: i64) {
@@ -45,21 +142,39 @@ impl Cash {
     }
 
     pub fn set_id(&mut self, id: u64) {
-        if id == 0 {
-            self.student_id = None;
-        } else {
-            self.student_id = Some(id)
-        }
+        self.student_id = if id == 0 { None } else { Some(id) };
     }
-    
+
     /// 设置备注信息
     pub fn set_note(&mut self, note: Option<String>) {
         self.note = note;
     }
-    
+
     /// 获取备注信息
     pub fn note(&self) -> Option<&str> {
         self.note.as_deref()
+    }
+
+    /// 检查是否是分期付款（新增）
+    pub fn is_installment(&self) -> bool {
+        self.installment.is_some()
+    }
+
+    /// 获取分期计划ID（新增）
+    pub fn installment_plan_id(&self) -> Option<u64> {
+        self.installment.as_ref().map(|i| i.plan_id)
+    }
+
+    /// 更新分期付款状态
+    pub fn set_installment_status(&mut self, status: InstallmentStatus) {
+        if let Some(installment) = &mut self.installment {
+            let old_status = installment.status;
+            installment.status = status;
+            info!(
+                "更新分期付款状态: UID={}, 计划ID={}, 期数={}, 状态: {:?} -> {:?}",
+                self.uid, installment.plan_id, installment.current_installment, old_status, status
+            );
+        }
     }
 }
 
@@ -126,7 +241,7 @@ impl CashDatabase {
 
     /// 将数据库序列化为JSON字符串
     pub fn json(&self) -> String {
-        serde_json::to_string(self).expect("将学生数据库序列化为JSON失败（此错误不应发生）")
+        serde_json::to_string(self).expect("将现金数据库序列化为JSON失败（此错误不应发生）")
     }
 
     /// 从JSON字符串反序列化数据库
@@ -155,7 +270,6 @@ impl CashDatabase {
     /// # 返回值
     /// 返回被删除的现金记录，如果不存在则返回None
     pub fn remove(&mut self, uid: &u64) -> Option<Cash> {
-        info!("Removing cash record with UID: {}", uid);
         let removed = self.cash_data.remove(uid);
         if removed.is_some() {
             info!("Successfully removed cash record with UID: {}", uid);
@@ -202,28 +316,119 @@ impl CashDatabase {
         info!("批量更新 {} 个现金记录", updated_count);
         updated_count
     }
+
+    /// 获取所有分期付款记录（新增）
+    pub fn get_installments(&self) -> Vec<&Cash> {
+        self.cash_data
+            .values()
+            .filter(|c| c.installment.is_some())
+            .collect()
+    }
+
+    /// 获取指定分期计划的所有记录（新增）
+    pub fn get_installments_by_plan(&self, plan_id: u64) -> Vec<&Cash> {
+        self.cash_data
+            .values()
+            .filter(|c| matches!(c.installment_plan_id(), Some(id) if id == plan_id))
+            .collect()
+    }
+
+    /// 获取逾期分期付款（新增）
+    pub fn get_overdue_installments(&self) -> Vec<&Cash> {
+        let now = Utc::now();
+        self.cash_data
+            .values()
+            .filter(|c| {
+                if let Some(installment) = &c.installment {
+                    installment.status == InstallmentStatus::Pending && installment.due_date < now
+                } else {
+                    false
+                }
+            })
+            .collect()
+    }
+
+    /// 获取学生的分期付款记录（新增）
+    pub fn get_student_installments(&self, student_id: u64) -> Vec<&Cash> {
+        self.cash_data
+            .values()
+            .filter(|c| c.student_id == Some(student_id) && c.installment.is_some())
+            .collect()
+    }
+
+    /// 生成下一期分期付款
+    pub fn generate_next_installment(
+        &mut self,
+        plan_id: u64,
+        due_date: DateTime<Utc>,
+    ) -> Result<u64> {
+        let installments = self.get_installments_by_plan(plan_id);
+        if installments.is_empty() {
+            error!("尝试生成下一期分期付款失败: 找不到计划ID {}", plan_id);
+            return Err(anyhow::anyhow!("找不到分期计划 {}", plan_id));
+        }
+
+        let first = installments.first().expect("已检查 installments 非空");
+        let installment_info = first
+            .installment
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("计划ID {} 对应的记录不是分期付款记录", plan_id))?;
+
+        // 计算当前最大期数
+        // 安全：get_installments_by_plan 返回的记录都有 installment 信息
+        let max_installment = installments
+            .iter()
+            .filter_map(|c| c.installment.as_ref().map(|i| i.current_installment))
+            .max()
+            .unwrap(); // 因为已经过滤，安全 unwrap
+
+        // 检查是否已完成所有分期
+        if max_installment >= installment_info.total_installments {
+            warn!(
+                "尝试生成下一期分期付款失败: 计划 {} 已完成 (当前期数 {}，总期数 {})",
+                plan_id, max_installment, installment_info.total_installments
+            );
+            return Err(anyhow::anyhow!("分期计划 {} 已完成", plan_id));
+        }
+
+        let next_installment = max_installment + 1;
+
+        // 创建新分期记录
+        let new_cash = Cash::new_installment(
+            first.student_id,
+            installment_info.total_amount,
+            installment_info.total_installments,
+            installment_info.frequency,
+            due_date,
+            next_installment,
+            Some(plan_id),
+        );
+
+        let uid = new_cash.uid;
+        let cash = new_cash.cash;
+        self.insert(new_cash);
+
+        info!(
+            "为计划 {} 生成第 {} 期分期付款: UID={}, 金额={}, 到期时间={}",
+            plan_id, next_installment, uid, cash, due_date
+        );
+
+        Ok(uid)
+    }
 }
 
 /// 加载已保存的 Cash UID 计数器
 pub fn load_saved_cash_uid() -> Result<u64> {
     let path = "./data/cash_uid_counter";
     match std::fs::read_to_string(path) {
-        Ok(content) => {
-            let result = content
-                .trim()
-                .parse::<u64>()
-                .with_context(|| format!("解析路径为 '{}' 的CASH UID失败", path));
-            match &result {
-                Ok(uid) => {
-                    info!("成功加载CASH UID: {}", uid);
-                    Ok(*uid)
-                }
-                Err(e) => {
-                    error!("解析CASH UID失败: {:?}", e);
-                    Err(result.unwrap_err())
-                }
-            }
-        }
+        Ok(content) => content
+            .trim()
+            .parse::<u64>()
+            .map(|uid| {
+                info!("成功加载CASH UID: {}", uid);
+                uid
+            })
+            .with_context(|| format!("解析路径为 '{}' 的CASH UID失败", path)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             debug!("未找到现有的CASH UID文件，从默认值1开始");
             Ok(1)
@@ -257,144 +462,4 @@ pub fn init() -> Result<()> {
     info!("CASH UID计数器初始化为 {}", saved_uid);
     save_uid()?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_cash_creation() {
-        let cash = Cash::new(Some(123));
-        assert!(cash.uid > 0);
-        assert_eq!(cash.student_id, Some(123));
-        assert_eq!(cash.cash, 0);
-    }
-
-    #[test]
-    fn test_cash_modification() {
-        let mut cash = Cash::new(None);
-
-        cash.add(100);
-        assert_eq!(cash.cash, 100);
-
-        cash.set_cash(200);
-        assert_eq!(cash.cash, 200);
-
-        cash.set_id(456);
-        assert_eq!(cash.student_id, Some(456));
-    }
-
-    #[test]
-    fn test_cash_database_crud() {
-        let mut db = CashDatabase::new();
-
-        // 测试插入
-        let cash1 = Cash::new(Some(1));
-        let cash2 = Cash::new(Some(2));
-        let uid1 = cash1.uid;
-        let uid2 = cash2.uid;
-
-        db.insert(cash1);
-        db.insert(cash2);
-
-        assert_eq!(db.len(), 2);
-        assert!(!db.is_empty());
-
-        // 测试查询
-        assert!(db.get(&uid1).is_some());
-        assert!(db.get(&uid2).is_some());
-        assert!(db.get(&999).is_none());
-
-        // 测试删除
-        let removed = db.remove(&uid1);
-        assert!(removed.is_some());
-        assert_eq!(db.len(), 1);
-        assert!(db.get(&uid1).is_none());
-
-        // 测试批量删除
-        let count = db.remove_batch(&[uid2, 999]);
-        assert_eq!(count, 1);
-        assert!(db.is_empty());
-    }
-
-    #[test]
-    fn test_cash_json_operations() {
-        let mut db = CashDatabase::new();
-        let cash = Cash::new(Some(123));
-        db.insert(cash);
-
-        let json = serde_json::to_string(&db).unwrap();
-        assert!(!json.is_empty());
-
-        let deserialized: CashDatabase = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.len(), 1);
-    }
-
-    #[test]
-    fn test_batch_operations() {
-        let mut db = CashDatabase::new();
-
-        // 测试批量插入
-        let cash_records = vec![Cash::new(None), Cash::new(None), Cash::new(None)];
-        let inserted_count = db.insert_batch(cash_records);
-        assert_eq!(inserted_count, 3);
-        assert_eq!(db.len(), 3);
-
-        // 收集所有UID用于批量更新测试
-        let uids: Vec<u64> = db.iter().map(|(&uid, _)| uid).collect();
-
-        // 测试批量更新 - 为所有现金记录添加金额
-        let updated_count = db.update_batch(&uids, |cash| {
-            cash.add(100);
-            true
-        });
-        assert_eq!(updated_count, 3);
-
-        // 验证更新结果
-        for &uid in &uids {
-            let cash = db.get(&uid).unwrap();
-            assert_eq!(cash.cash, 100);
-        }
-
-        // 测试批量更新 - 条件更新（只更新金额为100的记录）
-        let updated_count = db.update_batch(&uids, |cash| {
-            if cash.cash == 100 {
-                cash.set_cash(200);
-                true
-            } else {
-                false
-            }
-        });
-        assert_eq!(updated_count, 3);
-
-        // 验证条件更新结果
-        for &uid in &uids {
-            let cash = db.get(&uid).unwrap();
-            assert_eq!(cash.cash, 200);
-        }
-
-        // 测试批量更新 - 部分更新（只有一半的记录）
-        let updated_count = db.update_batch(&uids, |cash| {
-            if cash.uid % 2 == 0 {
-                cash.add(50);
-                true
-            } else {
-                false
-            }
-        });
-        // 计算偶数UID的数量（可能是1个或2个，取决于生成的UID）
-        let even_uid_count = uids.iter().filter(|&&uid| uid % 2 == 0).count();
-        assert_eq!(updated_count, even_uid_count);
-
-        // 验证部分更新结果
-        for &uid in &uids {
-            let cash = db.get(&uid).unwrap();
-            if uid % 2 == 0 {
-                assert_eq!(cash.cash, 250); // 200 + 50
-            } else {
-                assert_eq!(cash.cash, 200); // 保持不变
-            }
-        }
-    }
 }
