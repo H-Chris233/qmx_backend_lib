@@ -415,6 +415,46 @@ impl CashDatabase {
 
         Ok(uid)
     }
+    
+    /// 取消指定分期计划的所有未完成付款
+    ///
+    /// # 参数
+    /// * `plan_id` - 要取消的分期计划ID
+    ///
+    /// # 返回值
+    /// 返回被取消的付款记录数量
+    pub fn cancel_installment_plan(&mut self, plan_id: u64) -> usize {
+        let mut cancelled_count = 0;
+        
+        // 查找指定计划的所有分期记录
+        for cash in self.cash_data.values_mut() {
+            if let Some(installment) = &mut cash.installment {
+                if installment.plan_id == plan_id {
+                    // 只取消未完成的付款（Pending 或 Overdue 状态）
+                    if installment.status == InstallmentStatus::Pending 
+                        || installment.status == InstallmentStatus::Overdue {
+                        
+                        let old_status = installment.status;
+                        installment.status = InstallmentStatus::Cancelled;
+                        cancelled_count += 1;
+                        
+                        info!(
+                            "取消分期付款: UID={}, 计划ID={}, 期数={}, 状态: {:?} -> Cancelled",
+                            cash.uid, plan_id, installment.current_installment, old_status
+                        );
+                    }
+                }
+            }
+        }
+        
+        if cancelled_count > 0 {
+            info!("成功取消分期计划 {} 中的 {} 个未完成付款", plan_id, cancelled_count);
+        } else {
+            warn!("尝试取消分期计划 {}，但未找到任何可取消的未完成付款", plan_id);
+        }
+        
+        cancelled_count
+    }
 }
 
 /// 加载已保存的 Cash UID 计数器
