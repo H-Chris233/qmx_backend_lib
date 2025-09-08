@@ -424,9 +424,8 @@ pub fn load_saved_cash_uid() -> Result<u64> {
         Ok(content) => content
             .trim()
             .parse::<u64>()
-            .map(|uid| {
+            .inspect(|&uid| {
                 info!("成功加载CASH UID: {}", uid);
-                uid
             })
             .with_context(|| format!("解析路径为 '{}' 的CASH UID失败", path)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
