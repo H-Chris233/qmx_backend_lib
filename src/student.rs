@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub static STUDENT_UID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Person {
+pub struct Student {
     uid: u64,
     age: u8,
     name: String,
@@ -30,47 +30,38 @@ pub enum Class {
     Others,
 }
 
-pub trait Student {
-    fn set_age(&mut self, age: u8) -> &mut Self;
-    fn set_name(&mut self, name: String) -> &mut Self;
-    fn set_class(&mut self, class: Class) -> &mut Self;
-    fn set_lesson_left(&mut self, lesson: u32) -> &mut Self;
-    fn add_ring(&mut self, ring: f64) -> &mut Self;
-    fn set_note(&mut self, note: String) -> &mut Self;
-    fn set_phone(&mut self, phone: String) -> &mut Self;
-    /// 强制设置UID，这可能会破坏数据一致性
-    ///
-    /// # Safety
-    /// 此函数是unsafe的，因为它可能导致UID冲突，破坏数据一致性。
-    /// 调用者必须确保新的UID是唯一的且不会与现有记录冲突。
-    unsafe fn set_id(&mut self, id: u64) -> &mut Self;
+impl Student {
+    pub fn new() -> Self {
+        let uid = STUDENT_UID_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let new_student = Self {
+            uid,
+            age: 0,
+            name: "未填写".to_string(),
+            phone: "未填写".to_string(),
+            lesson_left: None,
+            class: Class::Others,
+            rings: Vec::new(),
+            note: String::new(),
+        };
+        info!("创建新用户，UID: {}", new_student.uid);
+        new_student
+    }
 
-    fn uid(&self) -> u64;
-    fn age(&self) -> u8;
-    fn name(&self) -> &str;
-    fn lesson_left(&self) -> Option<u32>;
-    fn class(&self) -> &Class;
-    fn rings(&self) -> &Vec<f64>;
-    fn note(&self) -> &str;
-    fn phone(&self) -> &str;
-}
-
-impl Student for Person {
-    fn set_age(&mut self, age: u8) -> &mut Self {
+    pub fn set_age(&mut self, age: u8) -> &mut Self {
         let old_age = self.age;
         self.age = age;
         debug!("年龄从 {} 更新到 {}，对象: {}", old_age, age, self.name);
         self
     }
 
-    fn set_name(&mut self, name: String) -> &mut Self {
+    pub fn set_name(&mut self, name: String) -> &mut Self {
         let old_name = self.name.clone();
         self.name = name;
         info!("名称从 '{}' 改为 '{}'", old_name, self.name);
         self
     }
 
-    fn set_class(&mut self, class: Class) -> &mut Self {
+    pub fn set_class(&mut self, class: Class) -> &mut Self {
         let old_class = self.class.clone();
         self.lesson_left = match class {
             Class::TenTry => Some(10),
@@ -81,7 +72,7 @@ impl Student for Person {
         self
     }
 
-    fn set_lesson_left(&mut self, lesson: u32) -> &mut Self {
+    pub fn set_lesson_left(&mut self, lesson: u32) -> &mut Self {
         if self.lesson_left.is_none() {
             warn!("尝试为非TenTry班级设置剩余课时: {}", self.name);
             return self;
@@ -95,13 +86,13 @@ impl Student for Person {
         self
     }
 
-    fn add_ring(&mut self, ring: f64) -> &mut Self {
+    pub fn add_ring(&mut self, ring: f64) -> &mut Self {
         info!("为 {} 添加新的环形数据", self.name);
         self.rings.push(ring);
         self
     }
 
-    fn set_note(&mut self, note: String) -> &mut Self {
+    pub fn set_note(&mut self, note: String) -> &mut Self {
         let old_note = self.note.clone();
         self.note = note;
         debug!("备注已更新: {}. 旧长度: {} 字符", self.name, old_note.len());
@@ -113,74 +104,55 @@ impl Student for Person {
     /// # Safety
     /// 此函数是unsafe的，因为它可能导致UID冲突，破坏数据一致性。
     /// 调用者必须确保新的UID是唯一的且不会与现有记录冲突。
-    unsafe fn set_id(&mut self, id: u64) -> &mut Self {
+    pub unsafe fn set_id(&mut self, id: u64) -> &mut Self {
         warn!("强制更改 UID 从 {} 到 {}", self.uid, id);
         self.uid = id;
         self
     }
 
-    fn set_phone(&mut self, phone: String) -> &mut Self {
+    pub fn set_phone(&mut self, phone: String) -> &mut Self {
         let old_phone = self.phone.clone();
         self.phone = phone;
         info!("电话号码从 '{}' 改为 '{}'", old_phone, self.phone);
         self
     }
 
-    fn uid(&self) -> u64 {
+    pub fn uid(&self) -> u64 {
         self.uid
     }
 
-    fn age(&self) -> u8 {
+    pub fn age(&self) -> u8 {
         self.age
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         self.name.as_str()
     }
 
-    fn lesson_left(&self) -> Option<u32> {
+    pub fn lesson_left(&self) -> Option<u32> {
         self.lesson_left
     }
 
-    fn class(&self) -> &Class {
+    pub fn class(&self) -> &Class {
         &self.class
     }
 
-    fn rings(&self) -> &Vec<f64> {
+    pub fn rings(&self) -> &Vec<f64> {
         &self.rings
     }
 
-    fn note(&self) -> &str {
+    pub fn note(&self) -> &str {
         &self.note
     }
 
-    fn phone(&self) -> &str {
+    pub fn phone(&self) -> &str {
         self.phone.as_str()
     }
 }
 
-impl Default for Person {
+impl Default for Student {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Person {
-    pub fn new() -> Self {
-        let uid = STUDENT_UID_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let new_person = Self {
-            uid,
-            age: 0,
-            name: "未填写".to_string(),
-            phone: "未填写".to_string(),
-            lesson_left: None,
-            class: Class::Others,
-            rings: Vec::new(),
-            note: String::new(),
-            // cash 字段已移除
-        };
-        info!("创建新用户，UID: {}", new_person.uid);
-        new_person
     }
 }
 
@@ -241,7 +213,7 @@ pub fn init() -> Result<()> {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StudentDatabase {
-    pub student_data: BTreeMap<u64, Person>,
+    pub student_data: BTreeMap<u64, Student>,
 }
 
 impl Default for StudentDatabase {
@@ -264,17 +236,17 @@ impl StudentDatabase {
         Ok(deserialized)
     }
 
-    pub fn insert(&mut self, person: Person) {
-        info!("插入用户，UID: {}", person.uid());
-        self.student_data.insert(person.uid(), person);
+    pub fn insert(&mut self, student: Student) {
+        info!("插入用户，UID: {}", student.uid());
+        self.student_data.insert(student.uid(), student);
     }
 
-    pub fn insert_batch(&mut self, persons: Vec<Person>) -> usize {
+    pub fn insert_batch(&mut self, students: Vec<Student>) -> usize {
         let mut inserted_count = 0;
-        for person in persons {
-            let uid = person.uid();
+        for student in students {
+            let uid = student.uid();
             info!("批量插入用户，UID: {}", uid);
-            self.student_data.insert(uid, person);
+            self.student_data.insert(uid, student);
             inserted_count += 1;
         }
         info!("批量插入 {} 个学生记录", inserted_count);
@@ -283,12 +255,12 @@ impl StudentDatabase {
 
     pub fn update_batch<F>(&mut self, uids: &[u64], mut update_fn: F) -> usize
     where
-        F: FnMut(&mut Person) -> bool,
+        F: FnMut(&mut Student) -> bool,
     {
         let mut updated_count = 0;
         for &uid in uids {
-            if let Some(person) = self.student_data.get_mut(&uid) {
-                if update_fn(person) {
+            if let Some(student) = self.student_data.get_mut(&uid) {
+                if update_fn(student) {
                     info!("批量更新学生记录，UID: {}", uid);
                     updated_count += 1;
                 }
@@ -302,7 +274,7 @@ impl StudentDatabase {
         serde_json::to_string(self).expect("将学生数据库序列化为JSON失败（此错误不应发生）")
     }
 
-    pub fn get(&self, index: &u64) -> Option<&Person> {
+    pub fn get(&self, index: &u64) -> Option<&Student> {
         self.student_data.get(index)
     }
 
@@ -330,7 +302,7 @@ impl StudentDatabase {
             .with_context(|| format!("反序列化路径为 '{}' 的学生数据库失败", path))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&u64, &Person)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (&u64, &Student)> + '_ {
         self.student_data.iter()
     }
 
@@ -349,7 +321,7 @@ impl StudentDatabase {
     ///
     /// # 返回值
     /// 返回被删除的学生记录，如果不存在则返回None
-    pub fn remove(&mut self, uid: &u64) -> Option<Person> {
+    pub fn remove(&mut self, uid: &u64) -> Option<Student> {
         info!("Removing student with UID: {}", uid);
         let removed = self.student_data.remove(uid);
         if removed.is_some() {

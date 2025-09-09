@@ -1,5 +1,5 @@
 use crate::cash::CashDatabase;
-use crate::student::{Student, StudentDatabase};
+use crate::student::{StudentDatabase};
 use anyhow::Result;
 
 /// 仪表盘统计数据结构
