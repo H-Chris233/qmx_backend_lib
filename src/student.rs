@@ -18,6 +18,7 @@ pub struct Student {
     phone: String,
     lesson_left: Option<u32>,
     class: Class,
+    subject: Subject,
     rings: Vec<f64>,
     note: String,
 }
@@ -27,6 +28,13 @@ pub enum Class {
     TenTry,
     Month,
     Year,
+    Others,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Subject {
+    Shooting,
+    Archery,
     Others,
 }
 
@@ -40,6 +48,7 @@ impl Student {
             phone: "未填写".to_string(),
             lesson_left: None,
             class: Class::Others,
+            subject: Subject::Others,
             rings: Vec::new(),
             note: String::new(),
         };
@@ -116,6 +125,14 @@ impl Student {
         info!("电话号码从 '{}' 改为 '{}'", old_phone, self.phone);
         self
     }
+    
+    /// Set the subject for the student
+    pub fn set_subject(&mut self, subject: Subject) -> &mut Self {
+        let old_subject = self.subject.clone();
+        self.subject = subject;
+        debug!("Subject changed from {:?} to {:?} for {}", old_subject, self.subject, self.name);
+        self
+    }
 
     pub fn uid(&self) -> u64 {
         self.uid
@@ -147,6 +164,11 @@ impl Student {
 
     pub fn phone(&self) -> &str {
         self.phone.as_str()
+    }
+    
+    /// Get the student's subject
+    pub fn subject(&self) -> &Subject {
+        &self.subject
     }
 }
 
