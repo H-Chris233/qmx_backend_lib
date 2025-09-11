@@ -108,11 +108,9 @@ impl Student {
         self
     }
 
-    /// 强制设置UID，这可能会破坏数据一致性
-    ///
     /// # Safety
-    /// 此函数是unsafe的，因为它可能导致UID冲突，破坏数据一致性。
-    /// 调用者必须确保新的UID是唯一的且不会与现有记录冲突。
+    /// 调用方必须确保提供的新 UID 在整个数据库中唯一，且不会与任何现有记录冲突；
+    /// 同时必须保证后续持久化流程会同步更新，避免造成数据不一致或悬挂引用。
     pub unsafe fn set_id(&mut self, id: u64) -> &mut Self {
         warn!("强制更改 UID 从 {} 到 {}", self.uid, id);
         self.uid = id;
@@ -125,48 +123,41 @@ impl Student {
         info!("电话号码从 '{}' 改为 '{}'", old_phone, self.phone);
         self
     }
-    
-    /// Set the subject for the student
+
     pub fn set_subject(&mut self, subject: Subject) -> &mut Self {
         let old_subject = self.subject.clone();
         self.subject = subject;
-        debug!("Subject changed from {:?} to {:?} for {}", old_subject, self.subject, self.name);
+        debug!(
+            "Subject changed from {:?} to {:?} for {}",
+            old_subject, self.subject, self.name
+        );
         self
     }
 
     pub fn uid(&self) -> u64 {
         self.uid
     }
-
     pub fn age(&self) -> u8 {
         self.age
     }
-
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
-
     pub fn lesson_left(&self) -> Option<u32> {
         self.lesson_left
     }
-
     pub fn class(&self) -> &Class {
         &self.class
     }
-
     pub fn rings(&self) -> &Vec<f64> {
         &self.rings
     }
-
     pub fn note(&self) -> &str {
         &self.note
     }
-
     pub fn phone(&self) -> &str {
         self.phone.as_str()
     }
-    
-    /// Get the student's subject
     pub fn subject(&self) -> &Subject {
         &self.subject
     }
@@ -212,24 +203,18 @@ pub fn save_uid() -> Result<()> {
     let uid = STUDENT_UID_COUNTER.load(Ordering::SeqCst);
     let path = "./data/uid_counter";
     let mut file = File::create(path).with_context(|| format!("无法创建文件 '{}'", path))?;
-
     file.write_all(uid.to_string().as_bytes())
         .with_context(|| format!("写入UID到文件 '{}' 失败", path))?;
-
     debug!("成功将UID: {} 保存到文件", uid);
     Ok(())
 }
 
 pub fn init() -> Result<()> {
     std::fs::create_dir_all("./data").with_context(|| "无法创建data目录")?;
-
     let saved_uid = load_saved_uid().context("初始化期间加载已保存的UID失败")?;
-
     STUDENT_UID_COUNTER.store(saved_uid, Ordering::SeqCst);
     info!("UID计数器初始化为 {}", saved_uid);
-
     save_uid().context("初始化期间保存初始UID失败")?;
-
     Ok(())
 }
 
@@ -307,21 +292,20 @@ impl StudentDatabase {
     pub fn save_to(&self, path: &str) -> Result<()> {
         info!("正在保存学生数据库到 {}", path);
         let tmp_path = format!("{}.tmp", path);
-
-        let file = File::create(&tmp_path)
-            .with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
+        let file =
+            File::create(&tmp_path).with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
         let mut writer = BufWriter::new(file);
-
         serde_json::to_writer(&mut writer, self)
             .with_context(|| format!("序列化并写入学生数据库到临时文件 '{}' 失败", tmp_path))?;
-
-        writer.flush().with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
-
-        writer.get_ref().sync_all().with_context(|| format!("同步临时文件 '{}' 到磁盘失败", tmp_path))?;
-
+        writer
+            .flush()
+            .with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
+        writer
+            .get_ref()
+            .sync_all()
+            .with_context(|| format!("同步临时文件 '{}' 到磁盘失败", tmp_path))?;
         std::fs::rename(&tmp_path, path)
             .with_context(|| format!("原子替换目标文件 '{}' 失败", path))?;
-
         Ok(())
     }
 
@@ -336,22 +320,13 @@ impl StudentDatabase {
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &Student)> + '_ {
         self.student_data.iter()
     }
-
     pub fn len(&self) -> usize {
         self.student_data.len()
     }
-
     pub fn is_empty(&self) -> bool {
         self.student_data.is_empty()
     }
 
-    /// 删除指定UID的学生记录
-    ///
-    /// # 参数
-    /// * `uid` - 要删除的学生UID
-    ///
-    /// # 返回值
-    /// 返回被删除的学生记录，如果不存在则返回None
     pub fn remove(&mut self, uid: &u64) -> Option<Student> {
         info!("Removing student with UID: {}", uid);
         let removed = self.student_data.remove(uid);
@@ -363,13 +338,6 @@ impl StudentDatabase {
         removed
     }
 
-    /// 批量删除学生记录
-    ///
-    /// # 参数
-    /// * `uids` - 要删除的学生UID列表
-    ///
-    /// # 返回值
-    /// 返回成功删除的学生数量
     pub fn remove_batch(&mut self, uids: &[u64]) -> usize {
         let mut removed_count = 0;
         for &uid in uids {

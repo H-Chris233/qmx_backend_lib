@@ -226,16 +226,21 @@ impl CashDatabase {
         info!("正在保存现金数据库到 {}", path);
         let tmp_path = format!("{}.tmp", path);
 
-        let file = File::create(&tmp_path)
-            .with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
+        let file =
+            File::create(&tmp_path).with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
         let mut writer = BufWriter::new(file);
 
         serde_json::to_writer(&mut writer, self)
             .with_context(|| format!("序列化并写入现金数据库到临时文件 '{}' 失败", tmp_path))?;
 
-        writer.flush().with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
+        writer
+            .flush()
+            .with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
 
-        writer.get_ref().sync_all().with_context(|| format!("同步临时文件 '{}' 到磁盘失败", tmp_path))?;
+        writer
+            .get_ref()
+            .sync_all()
+            .with_context(|| format!("同步临时文件 '{}' 到磁盘失败", tmp_path))?;
 
         std::fs::rename(&tmp_path, path)
             .with_context(|| format!("原子替换目标文件 '{}' 失败", path))
@@ -425,7 +430,7 @@ impl CashDatabase {
 
         Ok(uid)
     }
-    
+
     /// 取消指定分期计划的所有未完成付款
     ///
     /// # 参数
@@ -435,19 +440,19 @@ impl CashDatabase {
     /// 返回被取消的付款记录数量
     pub fn cancel_installment_plan(&mut self, plan_id: u64) -> usize {
         let mut cancelled_count = 0;
-        
+
         // 查找指定计划的所有分期记录
         for cash in self.cash_data.values_mut() {
             if let Some(installment) = &mut cash.installment {
                 if installment.plan_id == plan_id {
                     // 只取消未完成的付款（Pending 或 Overdue 状态）
-                    if installment.status == InstallmentStatus::Pending 
-                        || installment.status == InstallmentStatus::Overdue {
-                        
+                    if installment.status == InstallmentStatus::Pending
+                        || installment.status == InstallmentStatus::Overdue
+                    {
                         let old_status = installment.status;
                         installment.status = InstallmentStatus::Cancelled;
                         cancelled_count += 1;
-                        
+
                         info!(
                             "取消分期付款: UID={}, 计划ID={}, 期数={}, 状态: {:?} -> Cancelled",
                             cash.uid, plan_id, installment.current_installment, old_status
@@ -456,13 +461,19 @@ impl CashDatabase {
                 }
             }
         }
-        
+
         if cancelled_count > 0 {
-            info!("成功取消分期计划 {} 中的 {} 个未完成付款", plan_id, cancelled_count);
+            info!(
+                "成功取消分期计划 {} 中的 {} 个未完成付款",
+                plan_id, cancelled_count
+            );
         } else {
-            warn!("尝试取消分期计划 {}，但未找到任何可取消的未完成付款", plan_id);
+            warn!(
+                "尝试取消分期计划 {}，但未找到任何可取消的未完成付款",
+                plan_id
+            );
         }
-        
+
         cancelled_count
     }
 }
