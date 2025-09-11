@@ -306,12 +306,21 @@ impl StudentDatabase {
 
     pub fn save_to(&self, path: &str) -> Result<()> {
         info!("正在保存学生数据库到 {}", path);
-        let file =
-            File::create(path).with_context(|| format!("无法创建路径为 '{}' 的文件", path))?;
-        let writer = BufWriter::new(file);
+        let tmp_path = format!("{}.tmp", path);
 
-        serde_json::to_writer(writer, self)
-            .with_context(|| format!("序列化并写入学生数据库到 '{}' 失败", path))?;
+        let file = File::create(&tmp_path)
+            .with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
+        let mut writer = BufWriter::new(file);
+
+        serde_json::to_writer(&mut writer, self)
+            .with_context(|| format!("序列化并写入学生数据库到临时文件 '{}' 失败", tmp_path))?;
+
+        writer.flush().with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
+
+        writer.get_ref().sync_all().with_context(|| format!("同步临时文件 '{}' 到磁盘失败", tmp_path))?;
+
+        std::fs::rename(&tmp_path, path)
+            .with_context(|| format!("原子替换目标文件 '{}' 失败", path))?;
 
         Ok(())
     }
