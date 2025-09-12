@@ -5,6 +5,7 @@ use std::io::{BufReader, BufWriter};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +22,9 @@ pub struct Student {
     subject: Subject,
     rings: Vec<f64>,
     note: String,
+    // 会员相关字段
+    membership_start_date: Option<DateTime<Utc>>,
+    membership_end_date: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -51,6 +55,8 @@ impl Student {
             subject: Subject::Others,
             rings: Vec::new(),
             note: String::new(),
+            membership_start_date: None,
+            membership_end_date: None,
         };
         info!("创建新用户，UID: {}", new_student.uid);
         new_student
@@ -134,6 +140,71 @@ impl Student {
         self
     }
 
+    pub fn set_membership_dates(&mut self, start_date: Option<DateTime<Utc>>, end_date: Option<DateTime<Utc>>) -> &mut Self {
+        self.membership_start_date = start_date;
+        self.membership_end_date = end_date;
+        
+        match (&start_date, &end_date) {
+            (Some(start), Some(end)) => {
+                info!("设置{}的会员期限: {} 到 {}", self.name, start.format("%Y-%m-%d"), end.format("%Y-%m-%d"));
+            }
+            (Some(start), None) => {
+                info!("设置{}的会员开始时间: {}", self.name, start.format("%Y-%m-%d"));
+            }
+            (None, Some(end)) => {
+                info!("设置{}的会员结束时间: {}", self.name, end.format("%Y-%m-%d"));
+            }
+            (None, None) => {
+                info!("清除{}的会员时间", self.name);
+            }
+        }
+        self
+    }
+
+    pub fn set_membership_start_date(&mut self, start_date: DateTime<Utc>) -> &mut Self {
+        self.membership_start_date = Some(start_date);
+        info!("设置{}的会员开始时间: {}", self.name, start_date.format("%Y-%m-%d"));
+        self
+    }
+
+    pub fn set_membership_end_date(&mut self, end_date: DateTime<Utc>) -> &mut Self {
+        self.membership_end_date = Some(end_date);
+        info!("设置{}的会员结束时间: {}", self.name, end_date.format("%Y-%m-%d"));
+        self
+    }
+
+    pub fn clear_membership(&mut self) -> &mut Self {
+        self.membership_start_date = None;
+        self.membership_end_date = None;
+        info!("清除{}的会员信息", self.name);
+        self
+    }
+
+    /// 检查会员是否有效（当前时间在会员期内）
+    pub fn is_membership_active(&self) -> bool {
+        let now = Utc::now();
+        match (&self.membership_start_date, &self.membership_end_date) {
+            (Some(start), Some(end)) => now >= *start && now <= *end,
+            (Some(start), None) => now >= *start,  // 只有开始时间，认为永久有效
+            (None, Some(end)) => now <= *end,      // 只有结束时间
+            (None, None) => false,                 // 没有会员信息
+        }
+    }
+
+    /// 获取会员剩余天数
+    pub fn membership_days_remaining(&self) -> Option<i64> {
+        if let Some(end_date) = self.membership_end_date {
+            let now = Utc::now();
+            if now <= end_date {
+                Some((end_date - now).num_days())
+            } else {
+                Some(0) // 已过期
+            }
+        } else {
+            None // 没有结束时间
+        }
+    }
+
     pub fn uid(&self) -> u64 {
         self.uid
     }
@@ -160,6 +231,14 @@ impl Student {
     }
     pub fn subject(&self) -> &Subject {
         &self.subject
+    }
+    
+    pub fn membership_start_date(&self) -> Option<DateTime<Utc>> {
+        self.membership_start_date
+    }
+    
+    pub fn membership_end_date(&self) -> Option<DateTime<Utc>> {
+        self.membership_end_date
     }
 }
 

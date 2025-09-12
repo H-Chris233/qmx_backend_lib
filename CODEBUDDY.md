@@ -1,44 +1,83 @@
-<system-reminder>
-This is a reminder that your todo list is currently empty. DO NOT mention this to the user explicitly because they are already aware. If you are working on tasks that would benefit from a todo list please use the TodoWrite tool to create one. If not, please feel free to ignore. Again do not mention this message to the user.
-
-</system-reminder>
-
 # CODEBUDDY.md
 
-Repo: qmx_backend_lib (Rust library)
+## Project Overview
+**Repository:** qmx_backend_lib  
+**Type:** Rust library (v1.1.0, edition 2024)  
+**Purpose:** Backend library for QMX student and cash management system
 
-Common commands
-- Build: cargo build
-- Release build: cargo build --release
-- Run tests: cargo test
-- Run single test: cargo test <module_or_test_name>
-- Format: cargo fmt --all
-- Lint: cargo clippy --all-targets --all-features -- -D warnings
-- Docs: cargo doc --open
+## Common Commands
+- **Build:** `cargo build`
+- **Release build:** `cargo build --release`
+- **Run tests:** `cargo test`
+- **Run specific test:** `cargo test <test_name>`
+- **Format code:** `cargo fmt --all`
+- **Lint code:** `cargo clippy --all-targets --all-features -- -D warnings`
+- **Generate docs:** `cargo doc --open`
 
-Project structure and architecture
-- Library entry: src/lib.rs exposes modules: cash, student, database, init, save, stats; re-exports stats::{DashboardStats, get_dashboard_stats}
-- Data model:
-  - student.rs defines Student with UID, profile fields, class/subject enums, rings scores, notes; StudentDatabase wraps BTreeMap<u64, Student> with CRUD, batch ops, JSON persistence to ./data/student_database.json; UID persistence at ./data/uid_counter with AtomicU64 and init/save helpers
-  - cash.rs defines Cash records (own uid, optional student_id, amount, note, optional Installment with plan/status/frequency/due_date). CashDatabase mirrors StudentDatabase patterns, persists to ./data/cash_database.json; cash UID counter at ./data/cash_uid_counter; helpers for installments (plan grouping, overdue detection, next installment generation, cancel plan)
-- Aggregation:
-  - database.rs defines Database { student: StudentDatabase, cash: CashDatabase } and init() that ensures ./data exists, loads or creates sub-databases, and provides Database::save() to persist both
-- Statistics:
-  - stats.rs computes DashboardStats from StudentDatabase and CashDatabase: totals (students, revenue/expense), average/max score, active_courses (non-Others classes); exported via get_dashboard_stats
+## Project Structure
 
-Development notes
-- Data directory: ./data is created on init; JSON stores student_database.json, cash_database.json, uid_counter, cash_uid_counter
-- Logging: uses log crate; integrate env_logger or similar in binaries that consume this lib
-- Error handling: anyhow with rich context throughout persistence and init paths
-- Testing: comprehensive test suite with 58 tests across all modules in tests/ directory; use tempfile crate for test isolation
+### Source Modules (`src/`)
+- **`lib.rs`** - Library entry point, exports all modules and re-exports stats functionality
+- **`student.rs`** - Student management with UID system, profiles, and database operations
+- **`cash.rs`** - Cash/financial records with installment support and database operations  
+- **`database.rs`** - Combined database wrapper for student and cash data
+- **`stats.rs`** - Dashboard statistics computation and aggregation
+- **`init.rs`** - System initialization utilities
+- **`save.rs`** - Data persistence utilities
 
-Cross-file references
-- Module exports: src/lib.rs:1-9
-- Database loading/saving and init: src/database.rs:36-90
-- Student UID init/persist: src/student.rs:181-234, 211-221
-- Cash installment helpers: src/cash.rs:320-457
-- Stats computation: src/stats.rs:16-75
-- Test modules: tests/student_tests.rs, tests/cash_tests.rs, tests/stats_tests.rs, tests/database_tests.rs, tests/integration_tests.rs
+### Test Suite (`tests/`)
+- **Total tests:** 116 comprehensive tests across all modules
+- **`student_tests.rs`** - Student functionality, UID management, database operations
+- **`cash_tests.rs`** - Cash records, installments, database operations
+- **`database_tests.rs`** - Combined database functionality
+- **`stats_tests.rs`** - Statistics computation and edge cases
+- **`integration_tests.rs`** - Cross-module integration testing
 
-README/API highlights
-- See README.md for brief overview; API.md contains detailed module docs and examples which may be partially outdated versus current code (e.g., type names Person vs Student, i32 vs i64 in Cash). Prefer source over API.md when discrepancies occur.
+## Data Architecture
+
+### Student System
+- **Student struct:** UID, age, name, phone, lesson_left, class, subject, rings (scores), notes, membership dates
+- **Enums:** Class (TenTry, Month, Year, Others), Subject (Shooting, Archery, Others)
+- **StudentDatabase:** BTreeMap-based storage with CRUD operations, batch processing, JSON persistence
+- **UID Management:** Atomic counter with file persistence (`./data/uid_counter`)
+
+### Cash System  
+- **Cash struct:** Own UID, optional student_id, amount, note, optional Installment data
+- **Installment:** Plan details, status, frequency, due dates
+- **CashDatabase:** Similar to StudentDatabase with specialized installment operations
+- **Features:** Plan grouping, overdue detection, next installment generation, plan cancellation
+
+### Database Integration
+- **Database struct:** Combines StudentDatabase and CashDatabase
+- **Initialization:** Creates `./data` directory, loads or creates sub-databases
+- **Persistence:** JSON files in `./data/` directory
+
+### Statistics
+- **DashboardStats:** Aggregated metrics from both student and cash data
+- **Metrics:** Student totals, revenue/expense, score averages, active courses
+
+## Data Storage
+- **Directory:** `./data/` (auto-created on init)
+- **Student data:** `./data/student_database.json`
+- **Cash data:** `./data/cash_database.json`  
+- **UID counters:** `./data/uid_counter`, `./data/cash_uid_counter`
+
+## Dependencies
+- **Runtime:** anyhow, chrono, log, serde, serde_json
+- **Development:** tempfile (for test isolation)
+
+## Development Notes
+- **Error handling:** Uses `anyhow` crate with rich context throughout
+- **Logging:** Integrated via `log` crate (requires logger setup in consuming applications)
+- **Testing:** Comprehensive coverage with isolated test environments
+- **Concurrency:** Atomic operations for UID management
+
+## Recent Changes
+- Fixed `student_module_init` test by adding proper UID counter reset
+- All 116 tests now passing
+- Modified files: `src/student.rs`, `tests/student_tests.rs`
+
+## API Reference
+- See `README.md` for basic overview
+- See `API.md` for detailed documentation (may contain outdated examples)
+- When in doubt, refer to source code over API documentation

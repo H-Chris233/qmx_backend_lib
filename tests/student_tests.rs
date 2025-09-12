@@ -512,6 +512,9 @@ mod student_uid_management_tests {
     #[test]
     fn student_module_init() {
         let _ = fs::remove_file("./data/uid_counter");
+        
+        // Reset the UID counter to ensure clean test state
+        STUDENT_UID_COUNTER.store(1, Ordering::SeqCst);
 
         let result = init();
         // Should either succeed or fail gracefully
