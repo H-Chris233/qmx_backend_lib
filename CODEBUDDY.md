@@ -30,6 +30,7 @@ Development notes
 - Data directory: ./data is created on init; JSON stores student_database.json, cash_database.json, uid_counter, cash_uid_counter
 - Logging: uses log crate; integrate env_logger or similar in binaries that consume this lib
 - Error handling: anyhow with rich context throughout persistence and init paths
+- Testing: comprehensive test suite with 58 tests across all modules in tests/ directory; use tempfile crate for test isolation
 
 Cross-file references
 - Module exports: src/lib.rs:1-9
@@ -37,6 +38,7 @@ Cross-file references
 - Student UID init/persist: src/student.rs:181-234, 211-221
 - Cash installment helpers: src/cash.rs:320-457
 - Stats computation: src/stats.rs:16-75
+- Test modules: tests/student_tests.rs, tests/cash_tests.rs, tests/stats_tests.rs, tests/database_tests.rs, tests/integration_tests.rs
 
 README/API highlights
 - See README.md for brief overview; API.md contains detailed module docs and examples which may be partially outdated versus current code (e.g., type names Person vs Student, i32 vs i64 in Cash). Prefer source over API.md when discrepancies occur.
