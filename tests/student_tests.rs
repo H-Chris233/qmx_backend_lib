@@ -507,6 +507,8 @@ mod student_uid_management_tests {
         }
 
         let _ = fs::remove_file("./data/uid_counter");
+        // Reset counter for other tests
+        STUDENT_UID_COUNTER.store(1, Ordering::SeqCst);
     }
 
     #[test]

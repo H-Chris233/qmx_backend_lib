@@ -1,13 +1,14 @@
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
-use std::io::{BufReader, BufWriter};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+
+use crate::common::{Database, HasUid};
 
 pub static CASH_UID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -178,6 +179,12 @@ impl Cash {
     }
 }
 
+impl HasUid for Cash {
+    fn uid(&self) -> u64 {
+        self.uid
+    }
+}
+
 /// Cash 数据库结构，支持持久化存储
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CashDatabase {
@@ -190,146 +197,98 @@ impl Default for CashDatabase {
     }
 }
 
-impl CashDatabase {
-    pub fn new() -> Self {
+impl Database<Cash> for CashDatabase {
+    fn data(&self) -> &BTreeMap<u64, Cash> {
+        &self.cash_data
+    }
+    
+    fn data_mut(&mut self) -> &mut BTreeMap<u64, Cash> {
+        &mut self.cash_data
+    }
+    
+    fn default_path(&self) -> &'static str {
+        "./data/cash_database.json"
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "现金"
+    }
+    
+    fn static_type_name() -> &'static str {
+        "现金"
+    }
+    
+    fn new() -> Self {
         Self {
             cash_data: BTreeMap::new(),
         }
     }
+}
 
-    pub fn insert(&mut self, cash: Cash) {
-        info!("插入现金记录，UID为: {}", cash.uid);
-        self.cash_data.insert(cash.uid, cash);
-    }
-
-    pub fn insert_batch(&mut self, cash_records: Vec<Cash>) -> usize {
-        let mut inserted_count = 0;
-        for cash in cash_records {
-            let uid = cash.uid;
-            info!("批量插入现金记录，UID: {}", uid);
-            self.cash_data.insert(uid, cash);
-            inserted_count += 1;
-        }
-        info!("批量插入 {} 个现金记录", inserted_count);
-        inserted_count
-    }
-
-    pub fn get(&self, index: &u64) -> Option<&Cash> {
-        self.cash_data.get(index)
-    }
-
-    pub fn save(&self) -> Result<()> {
-        self.save_to("./data/cash_database.json")
-    }
-
-    pub fn save_to(&self, path: &str) -> Result<()> {
-        info!("正在保存现金数据库到 {}", path);
-        let tmp_path = format!("{}.tmp", path);
-
-        let file =
-            File::create(&tmp_path).with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
-        let mut writer = BufWriter::new(file);
-
-        serde_json::to_writer(&mut writer, self)
-            .with_context(|| format!("序列化并写入现金数据库到临时文件 '{}' 失败", tmp_path))?;
-
-        writer
-            .flush()
-            .with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
-
-        writer
-            .get_ref()
-            .sync_all()
-            .with_context(|| format!("同步临时文件 '{}' 到磁盘失败", tmp_path))?;
-
-        std::fs::rename(&tmp_path, path)
-            .with_context(|| format!("原子替换目标文件 '{}' 失败", path))
-    }
-
-    pub fn read_from(path: &str) -> Result<Self> {
-        info!("从 {} 加载现金数据库", path);
-        let file = File::open(path).with_context(|| format!("打开路径为 '{}' 的文件失败", path))?;
-        let reader = BufReader::new(file);
-        serde_json::from_reader(reader)
-            .with_context(|| format!("反序列化路径为 '{}' 的现金数据库失败", path))
-    }
-
-    /// 将数据库序列化为JSON字符串
-    pub fn json(&self) -> String {
-        serde_json::to_string(self).expect("将现金数据库序列化为JSON失败（此错误不应发生）")
-    }
-
+impl CashDatabase {
     /// 从JSON字符串反序列化数据库
     pub fn from_json(json_str: &str) -> Result<Self> {
         serde_json::from_str(json_str).with_context(|| "从JSON反序列化现金数据库失败")
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&u64, &Cash)> + '_ {
-        self.cash_data.iter()
+    // 向后兼容性方法 - 直接委托给trait实现
+    pub fn new() -> Self {
+        <Self as Database<Cash>>::new()
     }
 
-    pub fn len(&self) -> usize {
-        self.cash_data.len()
+    pub fn insert(&mut self, cash: Cash) {
+        <Self as Database<Cash>>::insert(self, cash)
     }
 
-    /// 检查数据库是否为空
-    pub fn is_empty(&self) -> bool {
-        self.cash_data.is_empty()
+    pub fn insert_batch(&mut self, cash_records: Vec<Cash>) -> usize {
+        <Self as Database<Cash>>::insert_batch(self, cash_records)
     }
 
-    /// 删除指定UID的现金记录
-    ///
-    /// # 参数
-    /// * `uid` - 要删除的现金记录UID
-    ///
-    /// # 返回值
-    /// 返回被删除的现金记录，如果不存在则返回None
-    pub fn remove(&mut self, uid: &u64) -> Option<Cash> {
-        let removed = self.cash_data.remove(uid);
-        if removed.is_some() {
-            info!("Successfully removed cash record with UID: {}", uid);
-        } else {
-            warn!(
-                "Attempted to remove non-existent cash record with UID: {}",
-                uid
-            );
-        }
-        removed
-    }
-
-    /// 批量删除现金记录
-    ///
-    /// # 参数
-    /// * `uids` - 要删除的现金记录UID列表
-    ///
-    /// # 返回值
-    /// 返回成功删除的现金记录数量
-    pub fn remove_batch(&mut self, uids: &[u64]) -> usize {
-        let mut removed_count = 0;
-        for &uid in uids {
-            if self.cash_data.remove(&uid).is_some() {
-                removed_count += 1;
-            }
-        }
-        info!("Batch removed {} cash records", removed_count);
-        removed_count
-    }
-
-    pub fn update_batch<F>(&mut self, uids: &[u64], mut update_fn: F) -> usize
+    pub fn update_batch<F>(&mut self, uids: &[u64], update_fn: F) -> usize
     where
         F: FnMut(&mut Cash) -> bool,
     {
-        let mut updated_count = 0;
-        for &uid in uids {
-            if let Some(cash) = self.cash_data.get_mut(&uid) {
-                if update_fn(cash) {
-                    info!("批量更新现金记录，UID: {}", uid);
-                    updated_count += 1;
-                }
-            }
-        }
-        info!("批量更新 {} 个现金记录", updated_count);
-        updated_count
+        <Self as Database<Cash>>::update_batch(self, uids, update_fn)
+    }
+
+    pub fn json(&self) -> String {
+        <Self as Database<Cash>>::json(self)
+    }
+
+    pub fn get(&self, index: &u64) -> Option<&Cash> {
+        <Self as Database<Cash>>::get(self, index)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        <Self as Database<Cash>>::save(self)
+    }
+
+    pub fn save_to(&self, path: &str) -> Result<()> {
+        <Self as Database<Cash>>::save_to(self, path)
+    }
+
+    pub fn read_from(path: &str) -> Result<Self> {
+        <Self as Database<Cash>>::read_from(path)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&u64, &Cash)> + '_ {
+        <Self as Database<Cash>>::iter(self)
+    }
+
+    pub fn len(&self) -> usize {
+        <Self as Database<Cash>>::len(self)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        <Self as Database<Cash>>::is_empty(self)
+    }
+
+    pub fn remove(&mut self, uid: &u64) -> Option<Cash> {
+        <Self as Database<Cash>>::remove(self, uid)
+    }
+
+    pub fn remove_batch(&mut self, uids: &[u64]) -> usize {
+        <Self as Database<Cash>>::remove_batch(self, uids)
     }
 
     /// 获取所有分期付款记录（新增）

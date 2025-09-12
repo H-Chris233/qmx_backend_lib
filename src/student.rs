@@ -1,13 +1,14 @@
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
-use std::io::{BufReader, BufWriter};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+
+use crate::common::{Database, HasUid};
 
 pub static STUDENT_UID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -220,7 +221,7 @@ impl Student {
     pub fn class(&self) -> &Class {
         &self.class
     }
-    pub fn rings(&self) -> &Vec<f64> {
+    pub fn rings(&self) -> &[f64] {
         &self.rings
     }
     pub fn note(&self) -> &str {
@@ -245,6 +246,12 @@ impl Student {
 impl Default for Student {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl HasUid for Student {
+    fn uid(&self) -> u64 {
+        self.uid
     }
 }
 
@@ -308,13 +315,35 @@ impl Default for StudentDatabase {
     }
 }
 
-impl StudentDatabase {
-    pub fn new() -> Self {
+impl Database<Student> for StudentDatabase {
+    fn data(&self) -> &BTreeMap<u64, Student> {
+        &self.student_data
+    }
+    
+    fn data_mut(&mut self) -> &mut BTreeMap<u64, Student> {
+        &mut self.student_data
+    }
+    
+    fn default_path(&self) -> &'static str {
+        "./data/student_database.json"
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "学生"
+    }
+    
+    fn static_type_name() -> &'static str {
+        "学生"
+    }
+    
+    fn new() -> Self {
         Self {
             student_data: BTreeMap::new(),
         }
     }
+}
 
+impl StudentDatabase {
     pub fn from_json(json: &str) -> Result<Self> {
         let deserialized =
             serde_json::from_str(json).with_context(|| "反序列化JSON到学生数据库失败")?;
@@ -322,109 +351,63 @@ impl StudentDatabase {
         Ok(deserialized)
     }
 
+    // 向后兼容性方法 - 直接委托给trait实现
+    pub fn new() -> Self {
+        <Self as Database<Student>>::new()
+    }
+
     pub fn insert(&mut self, student: Student) {
-        info!("插入用户，UID: {}", student.uid());
-        self.student_data.insert(student.uid(), student);
+        <Self as Database<Student>>::insert(self, student)
     }
 
     pub fn insert_batch(&mut self, students: Vec<Student>) -> usize {
-        let mut inserted_count = 0;
-        for student in students {
-            let uid = student.uid();
-            info!("批量插入用户，UID: {}", uid);
-            self.student_data.insert(uid, student);
-            inserted_count += 1;
-        }
-        info!("批量插入 {} 个学生记录", inserted_count);
-        inserted_count
+        <Self as Database<Student>>::insert_batch(self, students)
     }
 
-    pub fn update_batch<F>(&mut self, uids: &[u64], mut update_fn: F) -> usize
+    pub fn update_batch<F>(&mut self, uids: &[u64], update_fn: F) -> usize
     where
         F: FnMut(&mut Student) -> bool,
     {
-        let mut updated_count = 0;
-        for &uid in uids {
-            if let Some(student) = self.student_data.get_mut(&uid) {
-                if update_fn(student) {
-                    info!("批量更新学生记录，UID: {}", uid);
-                    updated_count += 1;
-                }
-            }
-        }
-        info!("批量更新 {} 个学生记录", updated_count);
-        updated_count
+        <Self as Database<Student>>::update_batch(self, uids, update_fn)
     }
 
     pub fn json(&self) -> String {
-        serde_json::to_string(self).expect("将学生数据库序列化为JSON失败（此错误不应发生）")
+        <Self as Database<Student>>::json(self)
     }
 
     pub fn get(&self, index: &u64) -> Option<&Student> {
-        self.student_data.get(index)
+        <Self as Database<Student>>::get(self, index)
     }
 
     pub fn save(&self) -> Result<()> {
-        self.save_to("./data/student_database.json")
+        <Self as Database<Student>>::save(self)
     }
 
     pub fn save_to(&self, path: &str) -> Result<()> {
-        info!("正在保存学生数据库到 {}", path);
-        let tmp_path = format!("{}.tmp", path);
-        let file =
-            File::create(&tmp_path).with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
-        let mut writer = BufWriter::new(file);
-        serde_json::to_writer(&mut writer, self)
-            .with_context(|| format!("序列化并写入学生数据库到临时文件 '{}' 失败", tmp_path))?;
-        writer
-            .flush()
-            .with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
-        writer
-            .get_ref()
-            .sync_all()
-            .with_context(|| format!("同步临时文件 '{}' 到磁盘失败", tmp_path))?;
-        std::fs::rename(&tmp_path, path)
-            .with_context(|| format!("原子替换目标文件 '{}' 失败", path))?;
-        Ok(())
+        <Self as Database<Student>>::save_to(self, path)
     }
 
     pub fn read_from(path: &str) -> Result<Self> {
-        info!("从 {} 加载学生数据库", path);
-        let file = File::open(path).with_context(|| format!("打开路径为 '{}' 的文件失败", path))?;
-        let reader = BufReader::new(file);
-        serde_json::from_reader(reader)
-            .with_context(|| format!("反序列化路径为 '{}' 的学生数据库失败", path))
+        <Self as Database<Student>>::read_from(path)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &Student)> + '_ {
-        self.student_data.iter()
+        <Self as Database<Student>>::iter(self)
     }
+
     pub fn len(&self) -> usize {
-        self.student_data.len()
+        <Self as Database<Student>>::len(self)
     }
+
     pub fn is_empty(&self) -> bool {
-        self.student_data.is_empty()
+        <Self as Database<Student>>::is_empty(self)
     }
 
     pub fn remove(&mut self, uid: &u64) -> Option<Student> {
-        info!("Removing student with UID: {}", uid);
-        let removed = self.student_data.remove(uid);
-        if removed.is_some() {
-            info!("Successfully removed student with UID: {}", uid);
-        } else {
-            warn!("Attempted to remove non-existent student with UID: {}", uid);
-        }
-        removed
+        <Self as Database<Student>>::remove(self, uid)
     }
 
     pub fn remove_batch(&mut self, uids: &[u64]) -> usize {
-        let mut removed_count = 0;
-        for &uid in uids {
-            if self.student_data.remove(&uid).is_some() {
-                removed_count += 1;
-            }
-        }
-        info!("Batch removed {} student records", removed_count);
-        removed_count
+        <Self as Database<Student>>::remove_batch(self, uids)
     }
 }
