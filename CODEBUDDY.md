@@ -2,7 +2,7 @@
 
 ## Project Overview
 **Repository:** qmx_backend_lib  
-**Type:** Rust library (v1.2.0, edition 2024)  
+**Type:** Rust library (v2.1.0, edition 2024)  
 **Purpose:** Backend library for QMX student and cash management system
 
 ## Common Commands
