@@ -4,7 +4,7 @@
 
 QMX Backend Library 是一个用 Rust 编写的学生管理和财务管理库，提供完整的学生信息管理、现金流记录、分期付款处理和统计分析功能。
 
-**版本：** 1.2.0  
+**版本：** 2.0.0  
 **最后更新：** 2025-01-09
 
 ## 新特性 (v1.2.0)
@@ -14,6 +14,7 @@ QMX Backend Library 是一个用 Rust 编写的学生管理和财务管理库，
 - 🛠️ **优化API设计** - 更符合Rust最佳实践
 - 👥 **会员管理系统** - 完整的会员期限管理功能
 - 🔒 **向后兼容性** - 现有代码无需修改
+- 🚀 **新增统一入口 QmxManager** - 更易用的新公共API（详见第8章）
 
 ## 模块结构
 
@@ -432,6 +433,143 @@ pub fn save(database: Database) -> Result<()>           // 现在返回 anyhow::
 
 ---
 
+## 8. 新公共API入口 (manager.rs) ✨新增✨
+
+### QmxManager 概览
+```rust
+pub struct QmxManager
+impl QmxManager {
+    pub fn new(auto_save: bool) -> Result<Self>
+    pub fn from_path(student_path: &str, cash_path: &str, auto_save: bool) -> Result<Self>
+    pub fn save(&self) -> Result<()>
+}
+```
+
+### 学生管理
+```rust
+impl QmxManager {
+    pub fn create_student(&self, builder: StudentBuilder) -> Result<u64>
+    pub fn get_student(&self, uid: u64) -> Result<Option<Student>>
+    pub fn update_student(&self, uid: u64, updater: StudentUpdater) -> Result<()>
+    pub fn delete_student(&self, uid: u64) -> Result<bool>
+    pub fn search_students(&self, query: StudentQuery) -> Result<Vec<Student>>
+    pub fn list_students(&self) -> Result<Vec<Student>>
+}
+```
+
+#### StudentBuilder
+```rust
+pub struct StudentBuilder
+impl StudentBuilder {
+    pub fn new(name: impl Into<String>, age: u8) -> Self
+    pub fn phone(self, phone: impl Into<String>) -> Self
+    pub fn class(self, class: Class) -> Self
+    pub fn subject(self, subject: Subject) -> Self
+    pub fn lesson_left(self, lessons: u32) -> Self
+    pub fn note(self, note: impl Into<String>) -> Self
+    pub fn membership(self, start: DateTime<Utc>, end: DateTime<Utc>) -> Self
+}
+```
+
+#### StudentUpdater
+```rust
+pub struct StudentUpdater
+impl StudentUpdater {
+    pub fn new() -> Self
+    pub fn name(self, name: impl Into<String>) -> Self
+    pub fn age(self, age: u8) -> Self
+    pub fn phone(self, phone: impl Into<String>) -> Self
+    pub fn class(self, class: Class) -> Self
+    pub fn subject(self, subject: Subject) -> Self
+    pub fn lesson_left(self, lessons: Option<u32>) -> Self
+    pub fn note(self, note: impl Into<String>) -> Self
+    pub fn add_ring(self, score: f64) -> Self
+    pub fn set_rings(self, rings: Vec<f64>) -> Self
+    pub fn membership(self, start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>) -> Self
+}
+```
+
+#### StudentQuery
+```rust
+pub struct StudentQuery
+impl StudentQuery {
+    pub fn new() -> Self
+    pub fn name_contains(self, name: impl Into<String>) -> Self
+    pub fn age_range(self, min: u8, max: u8) -> Self
+    pub fn class(self, class: Class) -> Self
+    pub fn subject(self, subject: Subject) -> Self
+    pub fn has_membership(self, has: bool) -> Self
+    pub fn membership_active_at(self, date: DateTime<Utc>) -> Self
+}
+```
+
+### 现金管理
+```rust
+impl QmxManager {
+    pub fn record_cash(&self, builder: CashBuilder) -> Result<u64>
+    pub fn get_cash(&self, uid: u64) -> Result<Option<Cash>>
+    pub fn update_cash(&self, uid: u64, updater: CashUpdater) -> Result<()>
+    pub fn delete_cash(&self, uid: u64) -> Result<bool>
+    pub fn search_cash(&self, query: CashQuery) -> Result<Vec<Cash>>
+    pub fn get_student_cash(&self, student_id: u64) -> Result<Vec<Cash>>
+}
+```
+
+#### CashBuilder
+```rust
+pub struct CashBuilder
+impl CashBuilder {
+    pub fn new(amount: i64) -> Self
+    pub fn student_id(self, student_id: u64) -> Self
+    pub fn note(self, note: impl Into<String>) -> Self
+    pub fn installment(self, installment: Installment) -> Self
+}
+```
+
+#### CashUpdater
+```rust
+pub struct CashUpdater
+impl CashUpdater {
+    pub fn new() -> Self
+    pub fn student_id(self, student_id: Option<u64>) -> Self
+    pub fn amount(self, amount: i64) -> Self
+    pub fn note(self, note: Option<String>) -> Self
+    pub fn installment(self, installment: Option<Installment>) -> Self
+}
+```
+
+#### CashQuery
+```rust
+pub struct CashQuery
+impl CashQuery {
+    pub fn new() -> Self
+    pub fn student_id(self, student_id: u64) -> Self
+    pub fn amount_range(self, min: i64, max: i64) -> Self
+    pub fn has_installment(self, has: bool) -> Self
+}
+```
+
+### 统计分析
+```rust
+impl QmxManager {
+    pub fn get_dashboard_stats(&self) -> Result<DashboardStats>
+    pub fn get_student_stats(&self, uid: u64) -> Result<StudentStats>
+    pub fn get_financial_stats(&self, period: TimePeriod) -> Result<FinancialStats>
+}
+```
+
+### 示例（节选）
+```rust
+let manager = QmxManager::new(true)?;
+let uid = manager.create_student(
+    StudentBuilder::new("张三", 16).class(Class::TenTry)
+)?;
+let cash_id = manager.record_cash(CashBuilder::new(5000).student_id(uid))?;
+let students = manager.search_students(StudentQuery::new().age_range(15, 18))?;
+```
+
+---
+
 ## 错误处理 ✨改进✨
 
 **统一错误处理：** 所有模块现在都使用 `anyhow::Result<T>` 进行错误处理，提供丰富的错误上下文信息。
@@ -672,6 +810,6 @@ match init::init() {
 
 ---
 
-*文档版本：2.0.0*  
-*对应代码版本：1.2.0*  
-*最后更新：2025-01-09*
+*文档版本：2.1.0*  
+*对应代码版本：2.0.0*  
+*最后更新：2025-09-13*

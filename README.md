@@ -1,7 +1,7 @@
 # QMX Backend Library
 
 [![Rust](https://img.shields.io/badge/rust-1.87+-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/H-Chris233/qmx_backend_lib)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/H-Chris233/qmx_backend_lib)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 一个用 Rust 编写的高性能学生管理和财务管理库，专为教育培训机构设计。提供完整的学生信息管理、现金流记录、分期付款处理、会员管理和统计分析功能。
@@ -25,7 +25,7 @@
 
 ```toml
 [dependencies]
-qmx_backend_lib = "1.2.0"
+qmx_backend_lib = "2.0.0"
 ```
 
 ### 基本使用
