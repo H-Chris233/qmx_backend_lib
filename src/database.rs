@@ -81,6 +81,66 @@ pub fn init() -> Result<Database> {
     Ok(Database::new(student_db, cash_db))
 }
 
+/// 初始化数据库（测试模式，使用简单保存）
+#[cfg(test)]
+pub fn init_simple() -> Result<Database> {
+    info!("正在初始化运行时数据库（测试模式）");
+    std::fs::create_dir_all("./data").with_context(|| "无法创建data目录")?;
+
+    let student_db = match StudentDatabase::read_from("./data/student_database.json") {
+        Ok(db) => {
+            info!("学生数据库加载成功");
+            db
+        }
+        Err(e) => {
+            if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+                if io_err.kind() == std::io::ErrorKind::NotFound {
+                    warn!("学生数据库文件不存在，正在创建新的数据库...");
+                    let new_db = StudentDatabase::new();
+                    <StudentDatabase as crate::common::Database<super::student::Student>>::save_to_simple(&new_db, "./data/student_database.json").with_context(|| "无法保存新建的学生数据库")?;
+                    new_db
+                } else {
+                    error!("加载学生数据库失败: {}", io_err);
+                    return Err(e).with_context(|| "加载学生数据库失败");
+                }
+            } else {
+                error!("加载学生数据库失败: {e:?}");
+                return Err(e).with_context(|| "加载学生数据库失败");
+            }
+        }
+    };
+
+    let cash_db = match CashDatabase::read_from("./data/cash_database.json") {
+        Ok(db) => {
+            info!("现金数据库加载成功");
+            db
+        }
+        Err(e) => {
+            if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+                if io_err.kind() == std::io::ErrorKind::NotFound {
+                    warn!("现金数据库文件不存在，正在创建新的数据库...");
+                    let new_db = CashDatabase::new();
+                    <CashDatabase as crate::common::Database<super::cash::Cash>>::save_to_simple(
+                        &new_db,
+                        "./data/cash_database.json",
+                    )
+                    .with_context(|| "无法保存新建的现金数据库")?;
+                    new_db
+                } else {
+                    error!("加载现金数据库失败: {}", io_err);
+                    return Err(e).with_context(|| "加载现金数据库失败");
+                }
+            } else {
+                error!("加载现金数据库失败: {e:?}");
+                return Err(e).with_context(|| "加载现金数据库失败");
+            }
+        }
+    };
+
+    info!("运行时数据库初始化完成（测试模式）");
+    Ok(Database::new(student_db, cash_db))
+}
+
 pub fn save(db: &Database) -> Result<()> {
     db.save()
 }

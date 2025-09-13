@@ -1,7 +1,11 @@
 use qmx_backend_lib::student::*;
+use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 
 use std::fs;
+
+// 用于确保UID相关测试串行执行的互斥锁
+static UID_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 fn setup() {
     fs::create_dir_all("./data").unwrap();
@@ -243,7 +247,6 @@ mod student_comprehensive_tests {
 mod student_database_comprehensive_tests {
     use super::*;
 
-
     #[test]
     fn student_database_new_and_default() {
         let db1 = StudentDatabase::new();
@@ -483,6 +486,9 @@ mod student_uid_management_tests {
 
     #[test]
     fn uid_counter_persistence() {
+        // 获取互斥锁以确保此测试串行执行
+        let _lock = UID_TEST_LOCK.lock().unwrap();
+
         let _ = fs::remove_file("./data/uid_counter");
 
         // Test basic UID loading
@@ -492,7 +498,7 @@ mod student_uid_management_tests {
             Err(_) => assert!(true, "Load failed gracefully"),
         }
 
-        // Test saving and loading 
+        // Test saving and loading
         STUDENT_UID_COUNTER.store(100, Ordering::SeqCst);
         let save_result = save_uid();
         match save_result {
@@ -513,8 +519,12 @@ mod student_uid_management_tests {
 
     #[test]
     fn student_module_init() {
+        // 获取互斥锁以确保此测试串行执行
+        let _lock = UID_TEST_LOCK.lock().unwrap();
+
+        // Clean up any existing uid_counter file to ensure fresh start
         let _ = fs::remove_file("./data/uid_counter");
-        
+
         // Reset the UID counter to ensure clean test state
         STUDENT_UID_COUNTER.store(1, Ordering::SeqCst);
 
@@ -523,22 +533,31 @@ mod student_uid_management_tests {
         match result {
             Ok(_) => {
                 let uid_after_init = STUDENT_UID_COUNTER.load(Ordering::SeqCst);
-                assert!(uid_after_init >= 1, "UID counter should be initialized to at least 1");
+                assert!(
+                    uid_after_init >= 1,
+                    "UID counter should be initialized to at least 1"
+                );
             }
             Err(_) => assert!(true, "Init failed gracefully"),
         }
 
+        // After init(), the counter should be at 1 (since we removed the file)
+        // The first student should get UID 1, then counter becomes 2
         let student = Student::new();
-        assert_eq!(student.uid(), 1);
+        assert_eq!(student.uid(), 1, "First student should have UID 1");
 
         let student2 = Student::new();
-        assert_eq!(student2.uid(), 2);
+        assert_eq!(student2.uid(), 2, "Second student should have UID 2");
 
+        // Clean up
         let _ = fs::remove_file("./data/uid_counter");
     }
 
     #[test]
     fn load_saved_uid_file_errors() {
+        // 获取互斥锁以确保此测试串行执行
+        let _lock = UID_TEST_LOCK.lock().unwrap();
+
         fs::create_dir_all("./data").unwrap();
 
         // Test with invalid content
@@ -550,7 +569,7 @@ mod student_uid_management_tests {
             Err(_) => assert!(true, "Function returned expected error"),
         }
 
-        // Test with empty content  
+        // Test with empty content
         fs::write("./data/uid_counter", "").unwrap();
         let result = load_saved_uid();
         // Should either error or handle gracefully
@@ -593,8 +612,12 @@ mod student_file_operations_tests {
         let test_path = "./nonexistent_dir/test_db.json";
         let db = StudentDatabase::new();
 
+        // 注意：save_to 现在会自动创建父目录，所以这个测试应该成功
         let result = db.save_to(test_path);
-        assert!(result.is_err());
+        assert!(result.is_ok());
+
+        // 清理测试文件
+        let _ = std::fs::remove_dir_all("./nonexistent_dir");
     }
 
     #[test]

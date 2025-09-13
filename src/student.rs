@@ -141,19 +141,36 @@ impl Student {
         self
     }
 
-    pub fn set_membership_dates(&mut self, start_date: Option<DateTime<Utc>>, end_date: Option<DateTime<Utc>>) -> &mut Self {
+    pub fn set_membership_dates(
+        &mut self,
+        start_date: Option<DateTime<Utc>>,
+        end_date: Option<DateTime<Utc>>,
+    ) -> &mut Self {
         self.membership_start_date = start_date;
         self.membership_end_date = end_date;
-        
+
         match (&start_date, &end_date) {
             (Some(start), Some(end)) => {
-                info!("设置{}的会员期限: {} 到 {}", self.name, start.format("%Y-%m-%d"), end.format("%Y-%m-%d"));
+                info!(
+                    "设置{}的会员期限: {} 到 {}",
+                    self.name,
+                    start.format("%Y-%m-%d"),
+                    end.format("%Y-%m-%d")
+                );
             }
             (Some(start), None) => {
-                info!("设置{}的会员开始时间: {}", self.name, start.format("%Y-%m-%d"));
+                info!(
+                    "设置{}的会员开始时间: {}",
+                    self.name,
+                    start.format("%Y-%m-%d")
+                );
             }
             (None, Some(end)) => {
-                info!("设置{}的会员结束时间: {}", self.name, end.format("%Y-%m-%d"));
+                info!(
+                    "设置{}的会员结束时间: {}",
+                    self.name,
+                    end.format("%Y-%m-%d")
+                );
             }
             (None, None) => {
                 info!("清除{}的会员时间", self.name);
@@ -164,13 +181,21 @@ impl Student {
 
     pub fn set_membership_start_date(&mut self, start_date: DateTime<Utc>) -> &mut Self {
         self.membership_start_date = Some(start_date);
-        info!("设置{}的会员开始时间: {}", self.name, start_date.format("%Y-%m-%d"));
+        info!(
+            "设置{}的会员开始时间: {}",
+            self.name,
+            start_date.format("%Y-%m-%d")
+        );
         self
     }
 
     pub fn set_membership_end_date(&mut self, end_date: DateTime<Utc>) -> &mut Self {
         self.membership_end_date = Some(end_date);
-        info!("设置{}的会员结束时间: {}", self.name, end_date.format("%Y-%m-%d"));
+        info!(
+            "设置{}的会员结束时间: {}",
+            self.name,
+            end_date.format("%Y-%m-%d")
+        );
         self
     }
 
@@ -186,9 +211,9 @@ impl Student {
         let now = Utc::now();
         match (&self.membership_start_date, &self.membership_end_date) {
             (Some(start), Some(end)) => now >= *start && now <= *end,
-            (Some(start), None) => now >= *start,  // 只有开始时间，认为永久有效
-            (None, Some(end)) => now <= *end,      // 只有结束时间
-            (None, None) => false,                 // 没有会员信息
+            (Some(start), None) => now >= *start, // 只有开始时间，认为永久有效
+            (None, Some(end)) => now <= *end,     // 只有结束时间
+            (None, None) => false,                // 没有会员信息
         }
     }
 
@@ -233,11 +258,11 @@ impl Student {
     pub fn subject(&self) -> &Subject {
         &self.subject
     }
-    
+
     pub fn membership_start_date(&self) -> Option<DateTime<Utc>> {
         self.membership_start_date
     }
-    
+
     pub fn membership_end_date(&self) -> Option<DateTime<Utc>> {
         self.membership_end_date
     }
@@ -319,23 +344,23 @@ impl Database<Student> for StudentDatabase {
     fn data(&self) -> &BTreeMap<u64, Student> {
         &self.student_data
     }
-    
+
     fn data_mut(&mut self) -> &mut BTreeMap<u64, Student> {
         &mut self.student_data
     }
-    
+
     fn default_path(&self) -> &'static str {
         "./data/student_database.json"
     }
-    
+
     fn type_name(&self) -> &'static str {
         "学生"
     }
-    
+
     fn static_type_name() -> &'static str {
         "学生"
     }
-    
+
     fn new() -> Self {
         Self {
             student_data: BTreeMap::new(),

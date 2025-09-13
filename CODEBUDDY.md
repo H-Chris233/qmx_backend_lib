@@ -8,8 +8,9 @@
 ## Common Commands
 - **Build:** `cargo build`
 - **Release build:** `cargo build --release`
-- **Run tests:** `cargo test`
-- **Run specific test:** `cargo test <test_name>`
+- **Run tests:** `cargo test -- --test-threads=1` (⚠️ 推荐单线程模式避免测试冲突)
+- **Run specific test:** `cargo test <test_name> -- --test-threads=1`
+- **清理测试环境:** `rm -rf ./data *.json *.tmp 2>/dev/null || true`
 - **Format code:** `cargo fmt --all`
 - **Lint code:** `cargo clippy --all-targets --all-features -- -D warnings`
 - **Generate docs:** `cargo doc --open`
@@ -27,12 +28,14 @@
 - **`save.rs`** - Data persistence utilities (now uses anyhow::Result)
 
 ### Test Suite (`tests/`)
-- **Total tests:** 116 comprehensive tests across all modules
+- **Total tests:** 129 comprehensive tests across all modules
 - **`student_tests.rs`** - Student functionality, UID management, database operations
 - **`cash_tests.rs`** - Cash records, installments, database operations
 - **`database_tests.rs`** - Combined database functionality
 - **`stats_tests.rs`** - Statistics computation and edge cases
 - **`integration_tests.rs`** - Cross-module integration testing
+- **`v1_api_tests.rs`** - Legacy API compatibility tests
+- **`v2_api_tests.rs`** - New QmxManager API tests
 
 ## Data Architecture
 

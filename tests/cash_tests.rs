@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use qmx_backend_lib::cash::*;
-use std::sync::atomic::Ordering;
 use std::fs;
+use std::sync::atomic::Ordering;
 
 fn setup() {
     fs::create_dir_all("./data").unwrap();
@@ -349,10 +349,14 @@ mod cash_file_operations_tests {
     #[test]
     fn cash_file_errors() {
         assert!(CashDatabase::read_from("./nonexistent_cash.json").is_err());
+        // 注意：save_to 现在会自动创建父目录，所以这个测试应该成功
+        // 如果需要测试错误情况，应该使用无效的路径（如包含无效字符的路径）
         assert!(
             CashDatabase::new()
                 .save_to("./nonexistent_dir/db.json")
-                .is_err()
+                .is_ok()
         );
+        // 清理测试文件
+        let _ = std::fs::remove_dir_all("./nonexistent_dir");
     }
 }

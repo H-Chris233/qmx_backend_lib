@@ -191,11 +191,11 @@ qmx_backend_lib/
 
 ## 🧪 测试
 
-本项目包含116个综合测试，覆盖所有核心功能：
+本项目包含129个综合测试，覆盖所有核心功能：
 
 ```bash
-# 运行所有测试
-cargo test
+# 运行所有测试（推荐使用单线程避免测试间数据冲突）
+cargo test -- --test-threads=1
 
 # 运行特定模块测试
 cargo test student_tests
@@ -203,8 +203,14 @@ cargo test cash_tests
 cargo test stats_tests
 
 # 运行测试并显示输出
-cargo test -- --nocapture
+cargo test -- --nocapture --test-threads=1
+
+# 如果遇到测试数据冲突问题，可先清理测试环境
+rm -rf ./data *.json *.tmp 2>/dev/null || true
 ```
+
+### 重要提示
+⚠️ **测试运行建议使用单线程模式** (`--test-threads=1`) 以避免测试间的数据冲突问题。某些测试使用共享的文件系统路径，并行执行可能导致数据竞争。
 
 测试覆盖：
 - ✅ 学生CRUD操作和会员管理

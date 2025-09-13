@@ -1,9 +1,9 @@
+use anyhow::{Context, Result};
+use log::{debug, info, warn};
+use serde::{Serialize, de::DeserializeOwned};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
-use anyhow::{Context, Result};
-use log::{debug, info};
-use serde::{Serialize, de::DeserializeOwned};
 
 /// 通用数据库trait，定义所有数据库的公共操作
 pub trait Database<T>
@@ -12,13 +12,13 @@ where
 {
     /// 获取数据存储的引用
     fn data(&self) -> &BTreeMap<u64, T>;
-    
+
     /// 获取数据存储的可变引用
     fn data_mut(&mut self) -> &mut BTreeMap<u64, T>;
-    
+
     /// 获取默认保存路径
     fn default_path(&self) -> &'static str;
-    
+
     /// 获取数据库类型名称（用于日志）
     fn type_name(&self) -> &'static str;
 
@@ -26,7 +26,7 @@ where
     fn new() -> Self;
 
     /// 插入记录
-    fn insert(&mut self, item: T) 
+    fn insert(&mut self, item: T)
     where
         T: HasUid,
     {
@@ -36,7 +36,7 @@ where
     }
 
     /// 批量插入记录
-    fn insert_batch(&mut self, items: Vec<T>) -> usize 
+    fn insert_batch(&mut self, items: Vec<T>) -> usize
     where
         T: HasUid,
     {
@@ -116,15 +116,14 @@ where
     }
 
     /// 序列化为JSON字符串
-    fn json(&self) -> String 
+    fn json(&self) -> String
     where
         Self: Serialize,
     {
-        serde_json::to_string(self)
-            .unwrap_or_else(|e| {
-                log::error!("序列化{}数据库失败: {}", self.type_name(), e);
-                panic!("序列化{}数据库失败: {}", self.type_name(), e);
-            })
+        serde_json::to_string(self).unwrap_or_else(|e| {
+            log::error!("序列化{}数据库失败: {}", self.type_name(), e);
+            panic!("序列化{}数据库失败: {}", self.type_name(), e);
+        })
     }
 
     /// 从JSON字符串反序列化
@@ -147,31 +146,113 @@ where
         self.save_to(self.default_path())
     }
 
+    /// 非原子保存到指定路径（用于测试环境）
+    fn save_to_simple(&self, path: &str) -> Result<()>
+    where
+        Self: Serialize,
+    {
+        info!("正在简单保存{}数据库到 {}", self.type_name(), path);
+
+        // 确保父目录存在
+        if let Some(parent) = std::path::Path::new(path).parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("无法创建父目录 '{}'", parent.display()))?;
+            }
+        }
+
+        let file = File::create(path).with_context(|| format!("无法创建文件 '{}'", path))?;
+        let writer = BufWriter::new(file);
+
+        serde_json::to_writer(writer, self).with_context(|| {
+            format!(
+                "序列化并写入{}数据库到文件 '{}' 失败",
+                self.type_name(),
+                path
+            )
+        })?;
+
+        debug!("成功简单保存{}数据库到 {}", self.type_name(), path);
+        Ok(())
+    }
+
     /// 保存到指定路径（原子操作）
     fn save_to(&self, path: &str) -> Result<()>
     where
         Self: Serialize,
     {
         info!("正在保存{}数据库到 {}", self.type_name(), path);
+
+        // 确保父目录存在
+        if let Some(parent) = std::path::Path::new(path).parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("无法创建父目录 '{}'", parent.display()))?;
+            }
+        }
+
         let tmp_path = format!("{}.tmp", path);
-        
-        let file = File::create(&tmp_path)
-            .with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
+
+        // 尝试删除可能存在的旧临时文件
+        let _ = std::fs::remove_file(&tmp_path);
+
+        let file =
+            File::create(&tmp_path).with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
         let mut writer = BufWriter::new(file);
-        
-        serde_json::to_writer(&mut writer, self)
-            .with_context(|| format!("序列化并写入{}数据库到临时文件 '{}' 失败", self.type_name(), tmp_path))?;
-        
-        writer.flush()
+
+        serde_json::to_writer(&mut writer, self).with_context(|| {
+            format!(
+                "序列化并写入{}数据库到临时文件 '{}' 失败",
+                self.type_name(),
+                tmp_path
+            )
+        })?;
+
+        writer
+            .flush()
             .with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
-        
-        writer.get_ref().sync_all()
-            .with_context(|| format!("同步临时文件 '{}' 到磁盘失败", tmp_path))?;
-        
-        std::fs::rename(&tmp_path, path)
-            .with_context(|| format!("原子替换目标文件 '{}' 失败", path))?;
-        
-        debug!("成功保存{}数据库到 {}", self.type_name(), path);
+
+        // 显式关闭文件句柄
+        drop(writer);
+
+        // 尝试原子重命名，如果失败则回退到直接写入
+        match std::fs::rename(&tmp_path, path) {
+            Ok(_) => {
+                debug!("成功原子保存{}数据库到 {}", self.type_name(), path);
+            }
+            Err(rename_err) => {
+                warn!("原子重命名失败，尝试回退到直接写入: {}", rename_err);
+
+                // 回退方案：读取临时文件内容，直接写入目标文件
+                match std::fs::read(&tmp_path) {
+                    Ok(content) => {
+                        std::fs::write(path, content)
+                            .with_context(|| format!("直接写入目标文件 '{}' 失败", path))?;
+
+                        let _ = std::fs::remove_file(&tmp_path); // 忽略删除错误
+                        debug!("通过直接写入方式保存{}数据库到 {}", self.type_name(), path);
+                    }
+                    Err(read_err) => {
+                        warn!("读取临时文件失败: {}，尝试重新序列化", read_err);
+
+                        // 最后的回退方案：重新序列化直接写入
+                        let serialized = serde_json::to_vec(self)
+                            .with_context(|| format!("重新序列化{}数据库失败", self.type_name()))?;
+
+                        std::fs::write(path, serialized)
+                            .with_context(|| format!("最终写入目标文件 '{}' 失败", path))?;
+
+                        let _ = std::fs::remove_file(&tmp_path); // 忽略删除错误
+                        debug!(
+                            "通过重新序列化方式保存{}数据库到 {}",
+                            self.type_name(),
+                            path
+                        );
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -181,11 +262,15 @@ where
         Self: DeserializeOwned,
     {
         info!("从 {} 加载{}数据库", path, Self::static_type_name());
-        let file = File::open(path)
-            .with_context(|| format!("打开路径为 '{}' 的文件失败", path))?;
+        let file = File::open(path).with_context(|| format!("打开路径为 '{}' 的文件失败", path))?;
         let reader = BufReader::new(file);
-        serde_json::from_reader(reader)
-            .with_context(|| format!("反序列化路径为 '{}' 的{}数据库失败", path, Self::static_type_name()))
+        serde_json::from_reader(reader).with_context(|| {
+            format!(
+                "反序列化路径为 '{}' 的{}数据库失败",
+                path,
+                Self::static_type_name()
+            )
+        })
     }
 }
 

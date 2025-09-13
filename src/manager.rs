@@ -1,65 +1,88 @@
-use std::sync::{Arc, RwLock};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use log::{info};
+use log::info;
+use std::sync::{Arc, RwLock};
 
-use crate::database::Database as DbContainer;
-use crate::student::{Student, Class, Subject, StudentDatabase};
 use crate::cash::{Cash, CashDatabase, Installment};
+use crate::database::Database as DbContainer;
 use crate::stats::{DashboardStats, get_dashboard_stats};
+use crate::student::{Class, Student, StudentDatabase, Subject};
 
 /// QMX管理器 - 统一的API入口点
-/// 
+///
 /// 提供线程安全的数据库操作接口，自动处理数据持久化和错误管理
 pub struct QmxManager {
     database: Arc<RwLock<DbContainer>>,
     auto_save: bool,
+    student_path: Option<String>,
+    cash_path: Option<String>,
 }
 
 impl QmxManager {
     /// 创建新的QMX管理器实例
-    /// 
+    ///
     /// # 参数
     /// * `auto_save` - 是否在每次操作后自动保存数据
-    /// 
+    ///
     /// # 示例
     /// ```rust
     /// use qmx_backend_lib::QmxManager;
-    /// 
+    ///
     /// let manager = QmxManager::new(true)?;
     /// ```
     pub fn new(auto_save: bool) -> Result<Self> {
         info!("正在初始化QMX管理器");
-        let database = crate::database::init()
-            .with_context(|| "初始化数据库失败")?;
-        
+        let database = crate::database::init().with_context(|| "初始化数据库失败")?;
+
         Ok(Self {
             database: Arc::new(RwLock::new(database)),
             auto_save,
+            student_path: None,
+            cash_path: None,
         })
     }
 
     /// 从指定路径加载数据库
     pub fn from_path(student_path: &str, cash_path: &str, auto_save: bool) -> Result<Self> {
-        info!("从指定路径加载数据库: student={}, cash={}", student_path, cash_path);
-        
+        info!(
+            "从指定路径加载数据库: student={}, cash={}",
+            student_path, cash_path
+        );
+
         let student_db = StudentDatabase::read_from(student_path)
             .with_context(|| format!("无法加载学生数据库: {}", student_path))?;
         let cash_db = CashDatabase::read_from(cash_path)
             .with_context(|| format!("无法加载现金数据库: {}", cash_path))?;
-        
+
         let database = DbContainer::new(student_db, cash_db);
-        
+
         Ok(Self {
             database: Arc::new(RwLock::new(database)),
             auto_save,
+            student_path: Some(student_path.to_string()),
+            cash_path: Some(cash_path.to_string()),
         })
     }
 
     /// 手动保存所有数据
     pub fn save(&self) -> Result<()> {
         let db = self.database.read().unwrap();
-        db.save().with_context(|| "保存数据库失败")
+
+        // 如果有自定义路径，使用自定义路径保存
+        if let (Some(student_path), Some(cash_path)) = (&self.student_path, &self.cash_path) {
+            info!("使用自定义路径保存数据库");
+            db.student
+                .save_to(student_path)
+                .with_context(|| "学生数据库持久化失败")?;
+            db.cash
+                .save_to(cash_path)
+                .with_context(|| "现金数据库持久化失败")?;
+        } else {
+            // 使用默认路径保存
+            db.save().with_context(|| "保存数据库失败")?;
+        }
+
+        Ok(())
     }
 
     /// 自动保存（如果启用）
@@ -77,10 +100,10 @@ impl QmxManager {
 
 impl QmxManager {
     /// 创建新学生
-    /// 
+    ///
     /// # 参数
     /// * `builder` - 学生构建器，使用链式调用设置属性
-    /// 
+    ///
     /// # 示例
     /// ```rust
     /// let student_id = manager.create_student(
@@ -97,7 +120,7 @@ impl QmxManager {
         let uid = student.uid();
         db.student.insert(student);
         drop(db);
-        
+
         self.auto_save_if_enabled()?;
         info!("创建学生成功，UID: {}", uid);
         Ok(uid)
@@ -114,7 +137,7 @@ impl QmxManager {
         let mut db = self.database.write().unwrap();
         updater.apply(&mut db.student, uid)?;
         drop(db);
-        
+
         self.auto_save_if_enabled()?;
         info!("更新学生信息成功，UID: {}", uid);
         Ok(())
@@ -125,7 +148,7 @@ impl QmxManager {
         let mut db = self.database.write().unwrap();
         let removed = db.student.remove(&uid).is_some();
         drop(db);
-        
+
         if removed {
             self.auto_save_if_enabled()?;
             info!("删除学生成功，UID: {}", uid);
@@ -147,18 +170,18 @@ impl QmxManager {
 }
 
 // ============================================================================
-// 现金管理API  
+// 现金管理API
 // ============================================================================
 
 impl QmxManager {
     /// 记录现金流
     pub fn record_cash(&self, builder: CashBuilder) -> Result<u64> {
         let mut db = self.database.write().unwrap();
-        let mut cash = builder.build();
+        let cash = builder.build();
         let uid = cash.uid;
         db.cash.insert(cash);
         drop(db);
-        
+
         self.auto_save_if_enabled()?;
         info!("记录现金流成功，UID: {}", uid);
         Ok(uid)
@@ -175,7 +198,7 @@ impl QmxManager {
         let mut db = self.database.write().unwrap();
         updater.apply(&mut db.cash, uid)?;
         drop(db);
-        
+
         self.auto_save_if_enabled()?;
         info!("更新现金记录成功，UID: {}", uid);
         Ok(())
@@ -186,7 +209,7 @@ impl QmxManager {
         let mut db = self.database.write().unwrap();
         let removed = db.cash.remove(&uid).is_some();
         drop(db);
-        
+
         if removed {
             self.auto_save_if_enabled()?;
             info!("删除现金记录成功，UID: {}", uid);
@@ -203,7 +226,17 @@ impl QmxManager {
     /// 获取学生的所有现金记录
     pub fn get_student_cash(&self, student_id: u64) -> Result<Vec<Cash>> {
         let db = self.database.read().unwrap();
-        Ok(db.cash.iter().filter_map(|(_, c)| if c.student_id == Some(student_id) { Some(c.clone()) } else { None }).collect())
+        Ok(db
+            .cash
+            .iter()
+            .filter_map(|(_, c)| {
+                if c.student_id == Some(student_id) {
+                    Some(c.clone())
+                } else {
+                    None
+                }
+            })
+            .collect())
     }
 }
 
@@ -215,8 +248,7 @@ impl QmxManager {
     /// 获取仪表板统计信息
     pub fn get_dashboard_stats(&self) -> Result<DashboardStats> {
         let db = self.database.read().unwrap();
-        get_dashboard_stats(&db.student, &db.cash)
-            .with_context(|| "获取统计信息失败")
+        get_dashboard_stats(&db.student, &db.cash).with_context(|| "获取统计信息失败")
     }
 
     /// 获取学生统计信息
@@ -299,11 +331,21 @@ impl StudentBuilder {
         let mut s = Student::new();
         s.set_name(self.name);
         s.set_age(self.age);
-        if let Some(phone) = self.phone { s.set_phone(phone); }
-        if let Some(class) = self.class { s.set_class(class); }
-        if let Some(subject) = self.subject { s.set_subject(subject); }
-        if let Some(lesson) = self.lesson_left { s.set_lesson_left(lesson); }
-        if let Some(note) = self.note { s.set_note(note); }
+        if let Some(phone) = self.phone {
+            s.set_phone(phone);
+        }
+        if let Some(class) = self.class {
+            s.set_class(class);
+        }
+        if let Some(subject) = self.subject {
+            s.set_subject(subject);
+        }
+        if let Some(lesson) = self.lesson_left {
+            s.set_lesson_left(lesson);
+        }
+        if let Some(note) = self.note {
+            s.set_note(note);
+        }
         if self.membership_start.is_some() || self.membership_end.is_some() {
             s.set_membership_dates(self.membership_start, self.membership_end);
         }
@@ -347,8 +389,12 @@ impl CashBuilder {
     fn build(self) -> Cash {
         let mut c = Cash::new(self.student_id);
         c.set_cash(self.amount);
-        if let Some(n) = self.note { c.set_note(Some(n)); }
-        if let Some(inst) = self.installment { c.installment = Some(inst); }
+        if let Some(n) = self.note {
+            c.set_note(Some(n));
+        }
+        if let Some(inst) = self.installment {
+            c.installment = Some(inst);
+        }
         c
     }
 }
@@ -377,7 +423,9 @@ enum StudentUpdate {
 
 impl StudentUpdater {
     pub fn new() -> Self {
-        Self { updates: Vec::new() }
+        Self {
+            updates: Vec::new(),
+        }
     }
 
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -431,20 +479,44 @@ impl StudentUpdater {
     }
 
     fn apply(self, db: &mut StudentDatabase, uid: u64) -> Result<()> {
-        let student = db.student_data.get_mut(&uid)
+        let student = db
+            .student_data
+            .get_mut(&uid)
             .ok_or_else(|| anyhow::anyhow!("学生不存在: {}", uid))?;
 
         for update in self.updates {
             match update {
-                StudentUpdate::Name(name) => { student.set_name(name); }
-                StudentUpdate::Age(age) => { student.set_age(age); }
-                StudentUpdate::Phone(phone) => { student.set_phone(phone); }
-                StudentUpdate::Class(class) => { student.set_class(class); }
-                StudentUpdate::Subject(subject) => { student.set_subject(subject); }
-                StudentUpdate::LessonLeft(lessons) => { if let Some(v) = lessons { student.set_lesson_left(v); } }
-                StudentUpdate::Note(note) => { student.set_note(note); }
-                StudentUpdate::AddRing(score) => { student.add_ring(score); }
-                StudentUpdate::SetRings(rings) => { for r in rings { student.add_ring(r); } }
+                StudentUpdate::Name(name) => {
+                    student.set_name(name);
+                }
+                StudentUpdate::Age(age) => {
+                    student.set_age(age);
+                }
+                StudentUpdate::Phone(phone) => {
+                    student.set_phone(phone);
+                }
+                StudentUpdate::Class(class) => {
+                    student.set_class(class);
+                }
+                StudentUpdate::Subject(subject) => {
+                    student.set_subject(subject);
+                }
+                StudentUpdate::LessonLeft(lessons) => {
+                    if let Some(v) = lessons {
+                        student.set_lesson_left(v);
+                    }
+                }
+                StudentUpdate::Note(note) => {
+                    student.set_note(note);
+                }
+                StudentUpdate::AddRing(score) => {
+                    student.add_ring(score);
+                }
+                StudentUpdate::SetRings(rings) => {
+                    for r in rings {
+                        student.add_ring(r);
+                    }
+                }
                 StudentUpdate::Membership(start, end) => {
                     student.set_membership_dates(start, end);
                 }
@@ -469,7 +541,9 @@ enum CashUpdate {
 
 impl CashUpdater {
     pub fn new() -> Self {
-        Self { updates: Vec::new() }
+        Self {
+            updates: Vec::new(),
+        }
     }
 
     pub fn student_id(mut self, student_id: Option<u64>) -> Self {
@@ -493,7 +567,9 @@ impl CashUpdater {
     }
 
     fn apply(self, db: &mut CashDatabase, uid: u64) -> Result<()> {
-        let cash = db.cash_data.get_mut(&uid)
+        let cash = db
+            .cash_data
+            .get_mut(&uid)
             .ok_or_else(|| anyhow::anyhow!("现金记录不存在: {}", uid))?;
 
         for update in self.updates {
@@ -529,7 +605,9 @@ enum StudentFilter {
 
 impl StudentQuery {
     pub fn new() -> Self {
-        Self { filters: Vec::new() }
+        Self {
+            filters: Vec::new(),
+        }
     }
 
     pub fn name_contains(mut self, name: impl Into<String>) -> Self {
@@ -607,7 +685,9 @@ enum CashFilter {
 
 impl CashQuery {
     pub fn new() -> Self {
-        Self { filters: Vec::new() }
+        Self {
+            filters: Vec::new(),
+        }
     }
 
     pub fn student_id(mut self, student_id: u64) -> Self {
@@ -625,6 +705,11 @@ impl CashQuery {
         self
     }
 
+    pub fn date_range(mut self, start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
+        self.filters.push(CashFilter::DateRange(start, end));
+        self
+    }
+
     fn execute(self, db: &CashDatabase) -> Vec<Cash> {
         db.iter()
             .map(|(_, c)| c.clone())
@@ -632,11 +717,11 @@ impl CashQuery {
             .filter(|cash| {
                 self.filters.iter().all(|filter| match filter {
                     CashFilter::StudentId(id) => cash.student_id == Some(*id),
-                    CashFilter::AmountRange(min, max) => {
-                        cash.cash >= *min && cash.cash <= *max
-                    }
+                    CashFilter::AmountRange(min, max) => cash.cash >= *min && cash.cash <= *max,
                     CashFilter::HasInstallment(has) => cash.installment.is_some() == *has,
-                    CashFilter::DateRange(_, _) => true, // TODO: 实现日期过滤
+                    CashFilter::DateRange(start, end) => {
+                        cash.created_at >= *start && cash.created_at <= *end
+                    }
                 })
             })
             .collect()
@@ -666,16 +751,21 @@ pub enum MembershipStatus {
 }
 
 impl StudentStats {
-    fn calculate(
-        student_db: &StudentDatabase,
-        cash_db: &CashDatabase,
-        uid: u64,
-    ) -> Result<Self> {
+    fn calculate(student_db: &StudentDatabase, cash_db: &CashDatabase, uid: u64) -> Result<Self> {
         let student = student_db
             .get(&uid)
             .ok_or_else(|| anyhow::anyhow!("学生不存在: {}", uid))?;
 
-        let cash_records: Vec<_> = cash_db.iter().filter_map(|(_, c)| if c.student_id == Some(uid) { Some(c) } else { None }).collect();
+        let cash_records: Vec<_> = cash_db
+            .iter()
+            .filter_map(|(_, c)| {
+                if c.student_id == Some(uid) {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .collect();
         let total_payments: i64 = cash_records.iter().map(|c| c.cash).sum();
         let payment_count = cash_records.len();
 
@@ -728,15 +818,22 @@ pub enum TimePeriod {
     ThisWeek,
     ThisMonth,
     ThisYear,
-    Custom { start: DateTime<Utc>, end: DateTime<Utc> },
+    Custom {
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
 }
 
 impl FinancialStats {
     fn calculate(cash_db: &CashDatabase, _period: TimePeriod) -> Result<Self> {
         let all_cash: Vec<_> = cash_db.iter().map(|(_, c)| c.clone()).collect();
-        
+
         let total_income: i64 = all_cash.iter().filter(|c| c.cash > 0).map(|c| c.cash).sum();
-        let total_expense: i64 = all_cash.iter().filter(|c| c.cash < 0).map(|c| c.cash.abs()).sum();
+        let total_expense: i64 = all_cash
+            .iter()
+            .filter(|c| c.cash < 0)
+            .map(|c| c.cash.abs())
+            .sum();
         let net_income = total_income - total_expense;
         let transaction_count = all_cash.len();
         let installment_count = all_cash.iter().filter(|c| c.installment.is_some()).count();

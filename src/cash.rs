@@ -25,6 +25,8 @@ pub struct Cash {
     pub note: Option<String>,
     /// 分期付款信息
     pub installment: Option<Installment>,
+    /// 创建时间戳
+    pub created_at: DateTime<Utc>,
 }
 
 /// 分期付款计划（新增）
@@ -79,6 +81,7 @@ impl Cash {
             cash: 0,
             note: None,
             installment: None, // 默认没有分期
+            created_at: Utc::now(),
         };
         info!("创建新的Cash记录，UID为: {}", new_cash.uid);
         new_cash
@@ -123,6 +126,7 @@ impl Cash {
                 due_date,
                 status: InstallmentStatus::Pending,
             }),
+            created_at: Utc::now(),
         };
 
         // 添加分期创建日志
@@ -201,23 +205,23 @@ impl Database<Cash> for CashDatabase {
     fn data(&self) -> &BTreeMap<u64, Cash> {
         &self.cash_data
     }
-    
+
     fn data_mut(&mut self) -> &mut BTreeMap<u64, Cash> {
         &mut self.cash_data
     }
-    
+
     fn default_path(&self) -> &'static str {
         "./data/cash_database.json"
     }
-    
+
     fn type_name(&self) -> &'static str {
         "现金"
     }
-    
+
     fn static_type_name() -> &'static str {
         "现金"
     }
-    
+
     fn new() -> Self {
         Self {
             cash_data: BTreeMap::new(),

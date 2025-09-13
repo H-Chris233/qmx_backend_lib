@@ -1,6 +1,6 @@
 use qmx_backend_lib::cash::{Cash, CashDatabase};
-use qmx_backend_lib::student::{Student, StudentDatabase};
 use qmx_backend_lib::database;
+use qmx_backend_lib::student::{Student, StudentDatabase};
 
 #[cfg(test)]
 mod database_comprehensive_tests {
@@ -13,14 +13,14 @@ mod database_comprehensive_tests {
             student: StudentDatabase::new(),
             cash: CashDatabase::new(),
         };
-        
+
         // Add some test data
         let student = Student::new();
         let cash = Cash::new(None);
-        
+
         db.student.insert(student);
         db.cash.insert(cash);
-        
+
         assert_eq!(db.student.len(), 1);
         assert_eq!(db.cash.len(), 1);
     }
@@ -43,9 +43,12 @@ mod database_comprehensive_tests {
             student: StudentDatabase::new(),
             cash: CashDatabase::new(),
         };
-        
+
         let result = db.save();
         // Save should succeed or fail gracefully
-        assert!(result.is_ok() || result.is_err(), "Save should return a result");
+        assert!(
+            result.is_ok() || result.is_err(),
+            "Save should return a result"
+        );
     }
 }
