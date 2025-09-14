@@ -28,7 +28,10 @@ impl QmxManager {
     /// ```rust
     /// use qmx_backend_lib::QmxManager;
     ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let manager = QmxManager::new(true)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(auto_save: bool) -> Result<Self> {
         info!("正在初始化QMX管理器");
@@ -66,7 +69,7 @@ impl QmxManager {
 
     /// 手动保存所有数据
     pub fn save(&self) -> Result<()> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
 
         // 如果有自定义路径，使用自定义路径保存
         if let (Some(student_path), Some(cash_path)) = (&self.student_path, &self.cash_path) {
@@ -106,16 +109,23 @@ impl QmxManager {
     ///
     /// # 示例
     /// ```rust
+    /// use qmx_backend_lib::{QmxManager, StudentBuilder};
+    /// use qmx_backend_lib::student::{Class, Subject};
+    ///
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let manager = QmxManager::new(true)?;
     /// let student_id = manager.create_student(
     ///     StudentBuilder::new("张三", 16)
     ///         .phone("13800138000")
     ///         .class(Class::TenTry)
-    ///         .subject(Subject::Math)
+    ///         .subject(Subject::Shooting)
     ///         .note("优秀学生")
     /// )?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn create_student(&self, builder: StudentBuilder) -> Result<u64> {
-        let mut db = self.database.write().unwrap();
+        let mut db = self.database.write().map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
         let student = builder.build();
         let uid = student.uid();
         db.student.insert(student);
@@ -128,13 +138,13 @@ impl QmxManager {
 
     /// 获取学生信息
     pub fn get_student(&self, uid: u64) -> Result<Option<Student>> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         Ok(db.student.get(&uid).cloned())
     }
 
     /// 更新学生信息
     pub fn update_student(&self, uid: u64, updater: StudentUpdater) -> Result<()> {
-        let mut db = self.database.write().unwrap();
+        let mut db = self.database.write().map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
         updater.apply(&mut db.student, uid)?;
         drop(db);
 
@@ -145,7 +155,7 @@ impl QmxManager {
 
     /// 删除学生
     pub fn delete_student(&self, uid: u64) -> Result<bool> {
-        let mut db = self.database.write().unwrap();
+        let mut db = self.database.write().map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
         let removed = db.student.remove(&uid).is_some();
         drop(db);
 
@@ -158,13 +168,13 @@ impl QmxManager {
 
     /// 搜索学生
     pub fn search_students(&self, query: StudentQuery) -> Result<Vec<Student>> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         Ok(query.execute(&db.student))
     }
 
     /// 获取所有学生
     pub fn list_students(&self) -> Result<Vec<Student>> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         Ok(db.student.iter().map(|(_, s)| s.clone()).collect())
     }
 }
@@ -176,7 +186,7 @@ impl QmxManager {
 impl QmxManager {
     /// 记录现金流
     pub fn record_cash(&self, builder: CashBuilder) -> Result<u64> {
-        let mut db = self.database.write().unwrap();
+        let mut db = self.database.write().map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
         let cash = builder.build();
         let uid = cash.uid;
         db.cash.insert(cash);
@@ -189,13 +199,13 @@ impl QmxManager {
 
     /// 获取现金记录
     pub fn get_cash(&self, uid: u64) -> Result<Option<Cash>> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         Ok(db.cash.get(&uid).cloned())
     }
 
     /// 更新现金记录
     pub fn update_cash(&self, uid: u64, updater: CashUpdater) -> Result<()> {
-        let mut db = self.database.write().unwrap();
+        let mut db = self.database.write().map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
         updater.apply(&mut db.cash, uid)?;
         drop(db);
 
@@ -206,7 +216,7 @@ impl QmxManager {
 
     /// 删除现金记录
     pub fn delete_cash(&self, uid: u64) -> Result<bool> {
-        let mut db = self.database.write().unwrap();
+        let mut db = self.database.write().map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
         let removed = db.cash.remove(&uid).is_some();
         drop(db);
 
@@ -219,13 +229,13 @@ impl QmxManager {
 
     /// 搜索现金记录
     pub fn search_cash(&self, query: CashQuery) -> Result<Vec<Cash>> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         Ok(query.execute(&db.cash))
     }
 
     /// 获取学生的所有现金记录
     pub fn get_student_cash(&self, student_id: u64) -> Result<Vec<Cash>> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         Ok(db
             .cash
             .iter()
@@ -247,19 +257,19 @@ impl QmxManager {
 impl QmxManager {
     /// 获取仪表板统计信息
     pub fn get_dashboard_stats(&self) -> Result<DashboardStats> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         get_dashboard_stats(&db.student, &db.cash).with_context(|| "获取统计信息失败")
     }
 
     /// 获取学生统计信息
     pub fn get_student_stats(&self, uid: u64) -> Result<StudentStats> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         StudentStats::calculate(&db.student, &db.cash, uid)
     }
 
     /// 获取财务统计信息
     pub fn get_financial_stats(&self, period: TimePeriod) -> Result<FinancialStats> {
-        let db = self.database.read().unwrap();
+        let db = self.database.read().map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
         FinancialStats::calculate(&db.cash, period)
     }
 }
@@ -419,6 +429,8 @@ enum StudentUpdate {
     AddRing(f64),
     SetRings(Vec<f64>),
     Membership(Option<DateTime<Utc>>, Option<DateTime<Utc>>),
+    UpdateRingAt(usize, f64),
+    RemoveRingAt(usize),
 }
 
 impl StudentUpdater {
@@ -473,6 +485,16 @@ impl StudentUpdater {
         self
     }
 
+    pub fn update_ring_at(mut self, index: usize, value: f64) -> Self {
+        self.updates.push(StudentUpdate::UpdateRingAt(index, value));
+        self
+    }
+
+    pub fn remove_ring_at(mut self, index: usize) -> Self {
+        self.updates.push(StudentUpdate::RemoveRingAt(index));
+        self
+    }
+
     pub fn membership(mut self, start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>) -> Self {
         self.updates.push(StudentUpdate::Membership(start, end));
         self
@@ -513,8 +535,13 @@ impl StudentUpdater {
                     student.add_ring(score);
                 }
                 StudentUpdate::SetRings(rings) => {
-                    // 直接替换成绩列表，而不是添加
                     student.set_rings(rings);
+                }
+                StudentUpdate::UpdateRingAt(index, value) => {
+                    student.update_ring_at(index, value)?;
+                }
+                StudentUpdate::RemoveRingAt(index) => {
+                    student.remove_ring_at(index)?;
                 }
                 StudentUpdate::Membership(start, end) => {
                     student.set_membership_dates(start, end);

@@ -353,12 +353,11 @@ impl CashDatabase {
             .ok_or_else(|| anyhow::anyhow!("计划ID {} 对应的记录不是分期付款记录", plan_id))?;
 
         // 计算当前最大期数
-        // 安全：get_installments_by_plan 返回的记录都有 installment 信息
         let max_installment = installments
             .iter()
             .filter_map(|c| c.installment.as_ref().map(|i| i.current_installment))
             .max()
-            .unwrap(); // 因为已经过滤，安全 unwrap
+            .ok_or_else(|| anyhow::anyhow!("计划ID {} 没有有效的分期记录", plan_id))?;
 
         // 检查是否已完成所有分期
         if max_installment >= installment_info.total_installments {

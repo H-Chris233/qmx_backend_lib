@@ -179,6 +179,7 @@ mod student_updater_tests {
 
     #[test]
     fn test_student_updater_rings() {
+        
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
         std::env::set_current_dir(temp_path).unwrap();
@@ -197,7 +198,7 @@ mod student_updater_tests {
             .update_student(student_id, StudentUpdater::new().add_ring(85.5))
             .unwrap();
 
-        // 添加多个成绩
+        // 替换所有成绩
         manager
             .update_student(
                 student_id,
@@ -206,9 +207,23 @@ mod student_updater_tests {
             .unwrap();
 
         let student = manager.get_student(student_id).unwrap().unwrap();
-        assert_eq!(student.rings().len(), 4); // 1 + 3
-        assert!(student.rings().contains(&85.5));
-        assert!(student.rings().contains(&90.0));
+        assert_eq!(student.rings().len(), 3);
+        assert_eq!(student.rings(), &[90.0, 88.5, 92.0]);
+
+        manager
+            .update_student(
+                student_id,
+                StudentUpdater::new().update_ring_at(1, 91.0),
+            )
+            .unwrap();
+        let student = manager.get_student(student_id).unwrap().unwrap();
+        assert_eq!(student.rings(), &[90.0, 91.0, 92.0]);
+
+        manager
+            .update_student(student_id, StudentUpdater::new().remove_ring_at(0))
+            .unwrap();
+        let student = manager.get_student(student_id).unwrap().unwrap();
+        assert_eq!(student.rings(), &[91.0, 92.0]);
     }
 
     #[test]

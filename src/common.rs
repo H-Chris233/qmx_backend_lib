@@ -122,7 +122,8 @@ where
     {
         serde_json::to_string(self).unwrap_or_else(|e| {
             log::error!("序列化{}数据库失败: {}", self.type_name(), e);
-            panic!("序列化{}数据库失败: {}", self.type_name(), e);
+            // 返回错误信息而不是 panic
+            format!("{{\"error\": \"序列化{}数据库失败: {}\"}}", self.type_name(), e)
         })
     }
 

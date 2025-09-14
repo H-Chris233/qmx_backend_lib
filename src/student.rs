@@ -114,6 +114,25 @@ impl Student {
         self
     }
 
+    pub fn update_ring_at(&mut self, index: usize, value: f64) -> Result<&mut Self> {
+        if index >= self.rings.len() {
+            anyhow::bail!("分数索引越界: {}，当前长度: {}", index, self.rings.len());
+        }
+        let old = self.rings[index];
+        self.rings[index] = value;
+        info!("更新 {} 的第 {} 条成绩: {} -> {}", self.name, index, old, value);
+        Ok(self)
+    }
+
+    pub fn remove_ring_at(&mut self, index: usize) -> Result<&mut Self> {
+        if index >= self.rings.len() {
+            anyhow::bail!("分数索引越界: {}，当前长度: {}", index, self.rings.len());
+        }
+        let removed = self.rings.remove(index);
+        info!("删除 {} 的第 {} 条成绩: {}", self.name, index, removed);
+        Ok(self)
+    }
+
     pub fn set_note(&mut self, note: String) -> &mut Self {
         let old_note = self.note.clone();
         self.note = note;
@@ -294,14 +313,14 @@ pub fn load_saved_uid() -> Result<u64> {
                 .trim()
                 .parse::<u64>()
                 .with_context(|| format!("解析路径为 '{}' 的UID文件失败", path));
-            match &result {
+            match result {
                 Ok(uid) => {
                     info!("成功加载UID: {}", uid);
-                    Ok(*uid)
+                    Ok(uid)
                 }
                 Err(e) => {
                     error!("解析UID失败: {:?}", e);
-                    Err(result.unwrap_err())
+                    Err(e)
                 }
             }
         }
