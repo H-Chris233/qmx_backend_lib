@@ -513,9 +513,8 @@ impl StudentUpdater {
                     student.add_ring(score);
                 }
                 StudentUpdate::SetRings(rings) => {
-                    for r in rings {
-                        student.add_ring(r);
-                    }
+                    // 直接替换成绩列表，而不是添加
+                    student.set_rings(rings);
                 }
                 StudentUpdate::Membership(start, end) => {
                     student.set_membership_dates(start, end);

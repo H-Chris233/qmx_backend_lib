@@ -108,6 +108,12 @@ impl Student {
         self
     }
 
+    pub fn set_rings(&mut self, rings: Vec<f64>) -> &mut Self {
+        info!("为 {} 设置成绩列表，共 {} 个成绩", self.name, rings.len());
+        self.rings = rings;
+        self
+    }
+
     pub fn set_note(&mut self, note: String) -> &mut Self {
         let old_note = self.note.clone();
         self.note = note;
