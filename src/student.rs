@@ -120,7 +120,10 @@ impl Student {
         }
         let old = self.rings[index];
         self.rings[index] = value;
-        info!("更新 {} 的第 {} 条成绩: {} -> {}", self.name, index, old, value);
+        info!(
+            "更新 {} 的第 {} 条成绩: {} -> {}",
+            self.name, index, old, value
+        );
         Ok(self)
     }
 

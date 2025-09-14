@@ -4,8 +4,8 @@
 
 QMX Backend Library v2 提供了全新的统一API入口 `QmxManager`，采用现代化的设计模式，包括Builder模式、Updater模式和Query Builder模式，提供更加直观和易用的开发体验。
 
-**版本：** 2.0.0  
-**最后更新：** 2025-09-13
+**版本：** 2.2.0  
+**最后更新：** 2025-09-14
 
 ## 新特性 (v2.0.0)
 
@@ -114,6 +114,18 @@ manager.update_student(uid,
             Some(Utc::now() + Duration::days(180))
         )
 )?;
+
+// 更新指定位置的成绩
+manager.update_student(uid,
+    StudentUpdater::new()
+        .update_ring_at(0, 9.8)  // 更新第1个成绩为9.8
+)?;
+
+// 删除指定位置的成绩
+manager.update_student(uid,
+    StudentUpdater::new()
+        .remove_ring_at(1)  // 删除第2个成绩
+)?;
 ```
 
 #### StudentUpdater API
@@ -129,6 +141,8 @@ impl StudentUpdater {
     pub fn note(self, note: impl Into<String>) -> Self
     pub fn add_ring(self, score: f64) -> Self
     pub fn set_rings(self, rings: Vec<f64>) -> Self
+    pub fn update_ring_at(self, index: usize, value: f64) -> Self
+    pub fn remove_ring_at(self, index: usize) -> Self
     pub fn membership(self, start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>) -> Self
 }
 ```
@@ -439,9 +453,22 @@ fn student_management_example() -> anyhow::Result<()> {
         StudentUpdater::new()
             .add_ring(8.9)
             .add_ring(9.1)
+            .add_ring(8.5)
     )?;
     
-    // 4. 查询该学生信息
+    // 4. 更新特定位置的成绩
+    manager.update_student(uid,
+        StudentUpdater::new()
+            .update_ring_at(1, 9.3)  // 将第2个成绩从9.1改为9.3
+    )?;
+    
+    // 5. 删除最后一个成绩
+    manager.update_student(uid,
+        StudentUpdater::new()
+            .remove_ring_at(2)  // 删除第3个成绩(8.5)
+    )?;
+    
+    // 6. 查询该学生信息
     if let Some(student) = manager.get_student(uid)? {
         println!("学生: {}, 年龄: {}", student.name(), student.age());
         println!("成绩: {:?}", student.rings());
@@ -451,7 +478,7 @@ fn student_management_example() -> anyhow::Result<()> {
         }
     }
     
-    // 5. 获取学生统计
+    // 7. 获取学生统计
     let stats = manager.get_student_stats(uid)?;
     println!("总付款: {}", stats.total_payments);
     
@@ -492,6 +519,71 @@ fn financial_analysis_example() -> anyhow::Result<()> {
     println!("\n=== 大额收入记录 ===");
     for cash in high_income {
         println!("金额: {}, 备注: {:?}", cash.cash, cash.note);
+    }
+    
+    Ok(())
+}
+```
+
+### 成绩管理流程
+
+```rust
+fn score_management_example() -> anyhow::Result<()> {
+    let manager = QmxManager::new(true)?;
+    
+    // 1. 创建学生
+    let uid = manager.create_student(
+        StudentBuilder::new("射击学员", 18)
+            .class(Class::TenTry)
+            .subject(Subject::Shooting)
+    )?;
+    
+    // 2. 添加初始成绩
+    manager.update_student(uid,
+        StudentUpdater::new()
+            .add_ring(8.5)
+            .add_ring(9.0)
+            .add_ring(8.8)
+            .add_ring(9.2)
+    )?;
+    
+    println!("初始成绩: {:?}", manager.get_student(uid)?.unwrap().rings());
+    // 输出: [8.5, 9.0, 8.8, 9.2]
+    
+    // 3. 更新第2个成绩（索引1）
+    manager.update_student(uid,
+        StudentUpdater::new()
+            .update_ring_at(1, 9.5)  // 9.0 -> 9.5
+    )?;
+    
+    println!("更新后成绩: {:?}", manager.get_student(uid)?.unwrap().rings());
+    // 输出: [8.5, 9.5, 8.8, 9.2]
+    
+    // 4. 删除第1个成绩（索引0）
+    manager.update_student(uid,
+        StudentUpdater::new()
+            .remove_ring_at(0)  // 删除8.5
+    )?;
+    
+    println!("删除后成绩: {:?}", manager.get_student(uid)?.unwrap().rings());
+    // 输出: [9.5, 8.8, 9.2]
+    
+    // 5. 批量替换所有成绩
+    manager.update_student(uid,
+        StudentUpdater::new()
+            .set_rings(vec![9.8, 9.6, 9.9, 10.0])
+    )?;
+    
+    println!("批量替换后: {:?}", manager.get_student(uid)?.unwrap().rings());
+    // 输出: [9.8, 9.6, 9.9, 10.0]
+    
+    // 6. 错误处理示例
+    match manager.update_student(uid,
+        StudentUpdater::new()
+            .update_ring_at(10, 9.0)  // 索引越界
+    ) {
+        Ok(_) => println!("更新成功"),
+        Err(e) => println!("更新失败: {}", e),
     }
     
     Ok(())
@@ -711,5 +803,5 @@ match manager.get_student(uid)? {
 
 ---
 
-*文档版本：2.1.0*  
-*最后更新：2025-09-13*
+*文档版本：2.2.0*  
+*最后更新：2025-09-14*

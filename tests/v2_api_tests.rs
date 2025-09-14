@@ -179,7 +179,6 @@ mod student_updater_tests {
 
     #[test]
     fn test_student_updater_rings() {
-        
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
         std::env::set_current_dir(temp_path).unwrap();
@@ -211,10 +210,7 @@ mod student_updater_tests {
         assert_eq!(student.rings(), &[90.0, 88.5, 92.0]);
 
         manager
-            .update_student(
-                student_id,
-                StudentUpdater::new().update_ring_at(1, 91.0),
-            )
+            .update_student(student_id, StudentUpdater::new().update_ring_at(1, 91.0))
             .unwrap();
         let student = manager.get_student(student_id).unwrap().unwrap();
         assert_eq!(student.rings(), &[90.0, 91.0, 92.0]);
