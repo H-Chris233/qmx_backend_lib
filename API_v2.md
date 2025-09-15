@@ -17,6 +17,15 @@ QMX Backend Library v2 提供了全新的统一API入口 `QmxManager`，采用�
 - 🔒 **线程安全设计** - Arc<RwLock<T>>架构
 - 🔧 **完全向后兼容** - v1 API继续可用
 
+## 🔔 v2.2.0 重要更新
+
+- ✨ **CashBuilder 增强校验** - `build()` 现在返回 `Result<Cash>`，增加金额校验
+- 🔧 **StudentUpdater 字段清空** - 支持显式清空 Optional 字段（lesson_left, membership）
+- 📊 **TimePeriod 实际过滤** - 财务统计现在按时间周期真正过滤数据，新增Today和Custom选项
+- 🛠️ **环境变量支持** - 通过 `QMX_DATA_DIR` 配置数据目录
+- ⚡ **性能优化** - 延迟克隆操作，提升查询性能
+- 🔒 **数据一致性** - 增强文件写入的原子性和崩溃一致性
+
 ---
 
 ## 1. QmxManager 统一入口
@@ -35,6 +44,11 @@ let manager = QmxManager::from_path(
     "./data/cash.json", 
     true
 )?;
+
+// ✨ v2.2.0: 使用环境变量配置数据目录
+// 设置 QMX_DATA_DIR=/custom/path 后，数据将保存到该目录
+std::env::set_var("QMX_DATA_DIR", "/custom/data/path");
+let manager = QmxManager::new(true)?;  // 将使用 /custom/data/path
 
 // 手动保存
 manager.save()?;
@@ -135,9 +149,9 @@ impl StudentUpdater {
     pub fn name(self, name: impl Into<String>) -> Self
     pub fn age(self, age: u8) -> Self
     pub fn phone(self, phone: impl Into<String>) -> Self
-    pub fn class(self, class: Class) -> Self
+    pub fn class(self, class: Class) -> Self                              // 使用set_class_with_lesson_init
     pub fn subject(self, subject: Subject) -> Self
-    pub fn lesson_left(self, lessons: Option<u32>) -> Self
+    pub fn lesson_left(self, lessons: Option<u32>) -> Self               // ✨ v2.2.0: 支持None清空字段
     pub fn note(self, note: impl Into<String>) -> Self
     pub fn add_ring(self, score: f64) -> Self
     pub fn set_rings(self, rings: Vec<f64>) -> Self
@@ -145,6 +159,21 @@ impl StudentUpdater {
     pub fn remove_ring_at(self, index: usize) -> Self
     pub fn membership(self, start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>) -> Self
 }
+```
+
+**✨ v2.2.0 新功能:**
+```rust
+// 现在可以显式清空课时字段
+let updater = StudentUpdater::new()
+    .lesson_left(None);  // 清空课时字段
+manager.update_student(uid, updater)?;
+
+// 清空会员信息
+let updater = StudentUpdater::new()
+    .membership(None, None);  // 清空会员开始和结束时间
+manager.update_student(uid, updater)?;
+
+// 之前这样的调用会被忽略，现在可以正常工作
 ```
 
 ### StudentQuery - 查询学生
@@ -236,11 +265,31 @@ let installment_id = manager.record_cash(
 #### CashBuilder API
 ```rust
 impl CashBuilder {
-    pub fn new(amount: i64) -> Self
+    pub fn new(amount: i64) -> Self                          // 金额不能为0
     pub fn student_id(self, student_id: u64) -> Self
     pub fn note(self, note: impl Into<String>) -> Self
     pub fn installment(self, installment: Installment) -> Self
+    
+    // ⚠️ v2.2.0 变更：现在返回 Result<Cash>
+    pub fn build(self) -> Result<Cash>                       // 可能返回金额校验错误
 }
+```
+
+**⚠️ 重要变更 (v2.2.0):**
+- `CashBuilder::build()` 现在返回 `Result<Cash>` 而不是 `Cash`
+- 金额为 0 时会返回错误：`"amount cannot be zero"`
+- `CashUpdater::amount()` 也会在运行时校验金额不能为0
+
+**迁移示例:**
+```rust
+// 旧代码 (v2.1.x)
+let cash = CashBuilder::new(amount).build();
+
+// 新代码 (v2.2.0+)
+let cash = CashBuilder::new(amount).build()?;  // 需要错误处理
+
+// CashUpdater 也需要注意
+manager.update_cash(id, CashUpdater::new().amount(0))?;  // 会返回错误
 ```
 
 ### CashUpdater - 更新现金记录
@@ -267,7 +316,7 @@ manager.update_cash(cash_id,
 impl CashUpdater {
     pub fn new() -> Self
     pub fn student_id(self, student_id: Option<u64>) -> Self
-    pub fn amount(self, amount: i64) -> Self
+    pub fn amount(self, amount: i64) -> Self                 // ⚠️ v2.2.0: 金额不能为0
     pub fn note(self, note: Option<String>) -> Self
     pub fn installment(self, installment: Option<Installment>) -> Self
 }
@@ -361,28 +410,39 @@ match stats.membership_status {
 ```rust
 use qmx_backend_lib::{FinancialStats, TimePeriod};
 
-// 本月财务统计
-let stats = manager.get_financial_stats(TimePeriod::ThisMonth)?;
+// ✨ v2.2.0: TimePeriod 现在实际工作！
+let stats = manager.get_financial_stats(TimePeriod::ThisMonth)?;  // 仅统计本月数据
 
 println!("总收入: {}", stats.total_income);
 println!("总支出: {}", stats.total_expense);
 println!("净收入: {}", stats.net_income);
-println!("分期付款总额: {}", stats.installment_total);
-println!("已收分期款: {}", stats.installment_paid);
-println!("待收分期款: {}", stats.installment_pending);
+println!("交易数量: {}", stats.transaction_count);
+println!("分期付款数量: {}", stats.installment_count);
 
-// 其他时间段
-let yearly_stats = manager.get_financial_stats(TimePeriod::ThisYear)?;
-let weekly_stats = manager.get_financial_stats(TimePeriod::ThisWeek)?;
+// 其他时间段 - 所有这些现在都按实际时间过滤
+let yearly_stats = manager.get_financial_stats(TimePeriod::ThisYear)?;   // 仅本年数据
+let weekly_stats = manager.get_financial_stats(TimePeriod::ThisWeek)?;   // 仅本周数据
+let today_stats = manager.get_financial_stats(TimePeriod::Today)?;       // 仅今日数据
+
+// 自定义时间范围
+let custom_stats = manager.get_financial_stats(TimePeriod::Custom {
+    start: start_date,
+    end: end_date,
+})?;
 ```
 
 #### TimePeriod 枚举
 ```rust
 pub enum TimePeriod {
+    Today,        // ✨ v2.2.0: 新增今日统计
     ThisWeek,
     ThisMonth,
     ThisYear,
     AllTime,
+    Custom {      // ✨ v2.2.0: 新增自定义时间范围
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
 }
 ```
 
@@ -716,7 +776,110 @@ fn error_handling_example() -> anyhow::Result<()> {
 
 ---
 
-## 8. 迁移指南 (v1 → v2)
+## 8. v2.2.0 破坏性变更详解
+
+### CashBuilder::build() 返回类型变更
+
+**变更内容：** `build()` 方法从返回 `Cash` 改为返回 `Result<Cash>`
+
+```rust
+// ❌ v2.1.x 及之前
+impl CashBuilder {
+    pub fn build(self) -> Cash  // 直接返回Cash
+}
+
+// ✅ v2.2.0+
+impl CashBuilder {
+    pub fn build(self) -> Result<Cash>  // 返回Result，可能失败
+}
+```
+
+**迁移步骤：**
+```rust
+// 旧代码
+let cash = CashBuilder::new(1000)
+    .student_id(uid)
+    .note("学费")
+    .build();  // 直接获取Cash
+
+// 新代码 - 方法1：使用 ? 操作符
+let cash = CashBuilder::new(1000)
+    .student_id(uid)
+    .note("学费")
+    .build()?;  // 需要错误处理
+
+// 新代码 - 方法2：显式处理错误
+let cash = match CashBuilder::new(1000).build() {
+    Ok(cash) => cash,
+    Err(e) => {
+        eprintln!("创建现金记录失败: {}", e);
+        return Err(e);
+    }
+};
+```
+
+### StudentUpdater 字段清空支持
+
+**变更内容：** 现在可以用 `None` 显式清空 Optional 字段
+
+```rust
+// ✅ v2.2.0 新功能
+manager.update_student(uid, 
+    StudentUpdater::new()
+        .lesson_left(None)        // 清空课时字段
+        .membership(None, None)   // 清空会员信息
+)?;
+
+// 之前这样的调用会被忽略，现在会实际清空字段
+```
+
+### TimePeriod 实际过滤实现
+
+**变更内容：** 财务统计现在真正按时间周期过滤数据
+
+```rust
+// ❌ v2.1.x 行为：TimePeriod 参数被忽略，总是返回全部数据
+let stats = manager.get_financial_stats(TimePeriod::ThisMonth)?;
+// 实际返回的是全部时间的统计
+
+// ✅ v2.2.0 行为：TimePeriod 参数实际生效
+let stats = manager.get_financial_stats(TimePeriod::ThisMonth)?;
+// 只返回本月的统计数据
+
+// 新增的时间选项
+let today_stats = manager.get_financial_stats(TimePeriod::Today)?;
+let custom_stats = manager.get_financial_stats(TimePeriod::Custom {
+    start: start_date,
+    end: end_date,
+})?;
+```
+
+**迁移影响：** 如果你的代码依赖于获取全部时间的统计数据，需要显式使用 `TimePeriod::AllTime`：
+
+```rust
+// 如果你想要全部时间的统计
+let all_stats = manager.get_financial_stats(TimePeriod::AllTime)?;
+```
+
+### 环境变量配置支持
+
+**新功能：** 支持通过 `QMX_DATA_DIR` 环境变量配置数据目录
+
+```rust
+// 设置环境变量
+std::env::set_var("QMX_DATA_DIR", "/custom/data/path");
+
+// 或在shell中设置
+// export QMX_DATA_DIR=/custom/data/path
+
+// QmxManager会自动使用该目录
+let manager = QmxManager::new(true)?;
+// 数据将保存到 /custom/data/path/students.json 和 /custom/data/path/cash.json
+```
+
+---
+
+## 9. 迁移指南 (v1 → v2)
 
 ### v1 到 v2 对照表
 
@@ -804,4 +967,4 @@ match manager.get_student(uid)? {
 ---
 
 *文档版本：2.2.0*  
-*最后更新：2025-09-14*
+*最后更新：2025-09-15*
