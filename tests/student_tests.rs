@@ -495,7 +495,9 @@ mod student_uid_management_tests {
         let initial_result = load_saved_uid();
         match initial_result {
             Ok(uid) => assert!(uid >= 1, "Loaded UID should be at least 1"),
-            Err(_) => assert!(true, "Load failed gracefully"),
+            Err(_) => {
+                // Load failed gracefully - this is expected behavior when no file exists
+            }
         }
 
         // Test saving and loading
@@ -506,10 +508,10 @@ mod student_uid_management_tests {
                 let loaded_result = load_saved_uid();
                 match loaded_result {
                     Ok(uid) => assert_eq!(uid, 100, "Saved UID should match loaded UID"),
-                    Err(_) => assert!(true, "Load after save failed gracefully"),
+                    Err(e) => panic!("Load after save should succeed, but got error: {}", e),
                 }
             }
-            Err(_) => assert!(true, "Save failed gracefully"),
+            Err(e) => panic!("Save should succeed, but got error: {}", e),
         }
 
         let _ = fs::remove_file("./data/uid_counter");
@@ -538,7 +540,7 @@ mod student_uid_management_tests {
                     "UID counter should be initialized to at least 1"
                 );
             }
-            Err(_) => assert!(true, "Init failed gracefully"),
+            Err(e) => panic!("Init should succeed, but got error: {}", e),
         }
 
         // After init(), the counter should be at 1 (since we removed the file)
@@ -565,8 +567,12 @@ mod student_uid_management_tests {
         let result = load_saved_uid();
         // Should either error or handle gracefully
         match result {
-            Ok(_) => assert!(true, "Function handled invalid input gracefully"),
-            Err(_) => assert!(true, "Function returned expected error"),
+            Ok(_) => {
+                // Function handled invalid input gracefully - this is acceptable
+            }
+            Err(_) => {
+                // Function returned expected error - this is also acceptable
+            }
         }
 
         // Test with empty content
@@ -574,8 +580,12 @@ mod student_uid_management_tests {
         let result = load_saved_uid();
         // Should either error or handle gracefully
         match result {
-            Ok(_) => assert!(true, "Function handled empty input gracefully"),
-            Err(_) => assert!(true, "Function returned expected error"),
+            Ok(_) => {
+                // Function handled empty input gracefully - this is acceptable
+            }
+            Err(_) => {
+                // Function returned expected error - this is also acceptable
+            }
         }
 
         let _ = fs::remove_file("./data/uid_counter");

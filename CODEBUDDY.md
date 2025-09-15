@@ -2,63 +2,36 @@
 
 ## Project Overview
 **Repository:** qmx_backend_lib  
-**Type:** Rust library (v2.1.0, edition 2024)  
+**Type:** Rust library (v2.2.0, edition 2024)  
 **Purpose:** Backend library for QMX student and cash management system
 
 ## Common Commands
 - **Build:** `cargo build`
 - **Release build:** `cargo build --release`
-- **Run tests:** `cargo test -- --test-threads=1` (⚠️ 推荐单线程模式避免测试冲突)
-- **Run specific test:** `cargo test <test_name> -- --test-threads=1`
-- **清理测试环境:** `rm -rf ./data *.json *.tmp 2>/dev/null || true`
-- **Format code:** `cargo fmt --all`
-- **Lint code:** `cargo clippy --all-targets --all-features -- -D warnings`
+- **Run tests:** `cargo test -- --test-threads=1`
+- **Format code:** `cargo fmt`
+- **Lint code:** `cargo clippy`
 - **Generate docs:** `cargo doc --open`
 
 ## Project Structure
 
 ### Source Modules (`src/`)
-- **`lib.rs`** - Library entry point, exports all modules and re-exports stats functionality
-- **`common.rs`** - ✨NEW✨ Generic Database<T> trait and HasUid trait for unified database operations
-- **`student.rs`** - Student management with UID system, profiles, database operations, and membership management
-- **`cash.rs`** - Cash/financial records with installment support and database operations  
-- **`database.rs`** - Combined database wrapper for student and cash data
-- **`stats.rs`** - Dashboard statistics computation and aggregation
-- **`init.rs`** - System initialization utilities (now uses anyhow::Result)
-- **`save.rs`** - Data persistence utilities (now uses anyhow::Result)
+- **`lib.rs`** - Library entry point
+- **`common.rs`** - Generic Database<T> trait and HasUid trait
+- **`student.rs`** - Student management with membership system
+- **`cash.rs`** - Cash/financial records with installment support  
+- **`database.rs`** - Combined database wrapper
+- **`stats.rs`** - Dashboard statistics computation
+- **`init.rs`** - System initialization utilities
+- **`save.rs`** - Data persistence utilities
 
 ### Test Suite (`tests/`)
-- **Total tests:** 129 comprehensive tests across all modules
-- **`student_tests.rs`** - Student functionality, UID management, database operations
-- **`cash_tests.rs`** - Cash records, installments, database operations
+- **Total tests:** 171 comprehensive tests
+- **`student_tests.rs`** - Student functionality and database operations
+- **`cash_tests.rs`** - Cash records and installments
 - **`database_tests.rs`** - Combined database functionality
-- **`stats_tests.rs`** - Statistics computation and edge cases
+- **`stats_tests.rs`** - Statistics computation
 - **`integration_tests.rs`** - Cross-module integration testing
-- **`v1_api_tests.rs`** - Legacy API compatibility tests
-- **`v2_api_tests.rs`** - New QmxManager API tests
-
-## Data Architecture
-
-### Student System
-- **Student struct:** UID, age, name, phone, lesson_left, class, subject, rings (scores), notes, membership dates
-- **Enums:** Class (TenTry, Month, Year, Others), Subject (Shooting, Archery, Others)
-- **StudentDatabase:** BTreeMap-based storage with CRUD operations, batch processing, JSON persistence
-- **UID Management:** Atomic counter with file persistence (`./data/uid_counter`)
-
-### Cash System  
-- **Cash struct:** Own UID, optional student_id, amount, note, optional Installment data
-- **Installment:** Plan details, status, frequency, due dates
-- **CashDatabase:** Similar to StudentDatabase with specialized installment operations
-- **Features:** Plan grouping, overdue detection, next installment generation, plan cancellation
-
-### Database Integration
-- **Database struct:** Combines StudentDatabase and CashDatabase
-- **Initialization:** Creates `./data` directory, loads or creates sub-databases
-- **Persistence:** JSON files in `./data/` directory
-
-### Statistics
-- **DashboardStats:** Aggregated metrics from both student and cash data
-- **Metrics:** Student totals, revenue/expense, score averages, active courses
 
 ## Data Storage
 - **Directory:** `./data/` (auto-created on init)
@@ -69,24 +42,3 @@
 ## Dependencies
 - **Runtime:** anyhow, chrono, log, serde, serde_json
 - **Development:** tempfile (for test isolation)
-
-## Development Notes
-- **Error handling:** Uses `anyhow` crate with rich context throughout
-- **Logging:** Integrated via `log` crate (requires logger setup in consuming applications)
-- **Testing:** Comprehensive coverage with isolated test environments
-- **Concurrency:** Atomic operations for UID management
-
-## Recent Changes (v1.2.0)
-- ✨ **Major Code Quality Improvements**: Created generic Database<T> trait, eliminated 200+ lines of duplicate code
-- 🎯 **Unified Error Handling**: Migrated all modules to use anyhow::Result for consistent error management
-- 🛠️ **API Design Enhancements**: rings() method now returns &[f64] instead of &Vec<f64>, following Rust best practices
-- 👥 **Membership Management**: Added comprehensive membership system with date tracking and status validation
-- 🚀 **Performance Optimizations**: Reduced codebase by 71 lines while adding functionality
-- ✅ **Test Improvements**: All 116 tests passing, fixed test isolation issues
-- 📚 **Documentation Overhaul**: Completely updated API.md and README.md with current examples and best practices
-- 🔒 **Backward Compatibility**: All existing code continues to work without modifications
-
-## API Reference
-- See `README.md` for quick start guide and basic usage examples
-- See `API.md` for comprehensive API documentation with up-to-date examples
-- All documentation is now synchronized with v1.2.0 codebase

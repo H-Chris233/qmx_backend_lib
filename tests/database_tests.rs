@@ -31,8 +31,12 @@ mod database_comprehensive_tests {
         let result = database::init();
         // Should return either Ok or Err - both are valid behavior
         match result {
-            Ok(_) => assert!(true, "Init succeeded"),
-            Err(_) => assert!(true, "Init failed gracefully"),
+            Ok(_) => {
+                // Init succeeded - this is the expected behavior
+            }
+            Err(_) => {
+                // Init failed gracefully - this can happen in test environments
+            }
         }
     }
 

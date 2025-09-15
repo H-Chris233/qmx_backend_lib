@@ -928,7 +928,7 @@ impl FinancialStats {
                 installment_count += 1;
             }
         }
-        
+
         let net_income = total_income - total_expense;
 
         Ok(Self {
