@@ -57,7 +57,7 @@ mod error_handling_tests {
 
         // 测试极端lesson_left值 - 需要先设置为TenTry班级才能设置课时
         assert_eq!(student.lesson_left(), None);
-        student.set_class(Class::TenTry); // 这会设置lesson_left为Some(10)
+        student.set_class_with_lesson_init(Class::TenTry); // 这会设置lesson_left为Some(10)
         assert_eq!(student.lesson_left(), Some(10));
         student.set_lesson_left(u32::MAX);
         assert_eq!(student.lesson_left(), Some(u32::MAX));
