@@ -4,7 +4,7 @@
 
 QMX Backend Library v2 提供了全新的统一API入口 `QmxManager`，采用现代化的设计模式，包括Builder模式、Updater模式和Query Builder模式，提供更加直观和易用的开发体验。
 
-**版本：** 2.2.0  
+**版本：** 2.3.0  
 **最后更新：** 2025-09-15
 
 ## 新特性 (v2.0.0)
@@ -966,5 +966,5 @@ match manager.get_student(uid)? {
 
 ---
 
-*文档版本：2.2.0*  
+*文档版本：2.3.0*  
 *最后更新：2025-09-15*

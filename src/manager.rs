@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Result, Error};
 use chrono::{DateTime, Utc};
 use log::info;
 use std::sync::{Arc, RwLock};
@@ -28,14 +28,14 @@ impl QmxManager {
     /// ```rust
     /// use qmx_backend_lib::QmxManager;
     ///
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> qmx_backend_lib::error::Result<()> {
     /// let manager = QmxManager::new(true)?;
     /// # Ok(())
     /// # }
     /// ```
     pub fn new(auto_save: bool) -> Result<Self> {
         info!("正在初始化QMX管理器");
-        let database = crate::database::init().with_context(|| "初始化数据库失败")?;
+        let database = crate::database::init()?;
 
         Ok(Self {
             database: Arc::new(RwLock::new(database)),
@@ -52,10 +52,8 @@ impl QmxManager {
             student_path, cash_path
         );
 
-        let student_db = StudentDatabase::read_from(student_path)
-            .with_context(|| format!("无法加载学生数据库: {}", student_path))?;
-        let cash_db = CashDatabase::read_from(cash_path)
-            .with_context(|| format!("无法加载现金数据库: {}", cash_path))?;
+        let student_db = StudentDatabase::read_from(student_path)?;
+        let cash_db = CashDatabase::read_from(cash_path)?;
 
         let database = DbContainer::new(student_db, cash_db);
 
@@ -72,20 +70,20 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
 
         // 如果有自定义路径，使用自定义路径保存
         if let (Some(student_path), Some(cash_path)) = (&self.student_path, &self.cash_path) {
             info!("使用自定义路径保存数据库");
             db.student
                 .save_to(student_path)
-                .with_context(|| "学生数据库持久化失败")?;
+                .map_err(Error::from)?;
             db.cash
                 .save_to(cash_path)
-                .with_context(|| "现金数据库持久化失败")?;
+                .map_err(Error::from)?;
         } else {
             // 使用默认路径保存
-            db.save().with_context(|| "保存数据库失败")?;
+            db.save().map_err(Error::from)?;
         }
 
         Ok(())
@@ -115,7 +113,7 @@ impl QmxManager {
     /// use qmx_backend_lib::{QmxManager, StudentBuilder};
     /// use qmx_backend_lib::student::{Class, Subject};
     ///
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> qmx_backend_lib::error::Result<()> {
     /// # let manager = QmxManager::new(true)?;
     /// let student_id = manager.create_student(
     ///     StudentBuilder::new("张三", 16)
@@ -131,7 +129,7 @@ impl QmxManager {
         let mut db = self
             .database
             .write()
-            .map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         let student = builder.build();
         let uid = student.uid();
         db.student.insert(student);
@@ -147,7 +145,7 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         Ok(db.student.get(&uid).cloned())
     }
 
@@ -156,7 +154,7 @@ impl QmxManager {
         let mut db = self
             .database
             .write()
-            .map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         updater.apply(&mut db.student, uid)?;
         drop(db);
 
@@ -170,7 +168,7 @@ impl QmxManager {
         let mut db = self
             .database
             .write()
-            .map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         let removed = db.student.remove(&uid).is_some();
         drop(db);
 
@@ -186,7 +184,7 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         Ok(query.execute(&db.student))
     }
 
@@ -195,7 +193,7 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         Ok(db.student.iter().map(|(_, s)| s).cloned().collect())
     }
 }
@@ -210,7 +208,7 @@ impl QmxManager {
         let mut db = self
             .database
             .write()
-            .map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         let cash = builder.build()?;
         let uid = cash.uid;
         db.cash.insert(cash);
@@ -226,7 +224,7 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         Ok(db.cash.get(&uid).cloned())
     }
 
@@ -235,7 +233,7 @@ impl QmxManager {
         let mut db = self
             .database
             .write()
-            .map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         updater.apply(&mut db.cash, uid)?;
         drop(db);
 
@@ -249,7 +247,7 @@ impl QmxManager {
         let mut db = self
             .database
             .write()
-            .map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         let removed = db.cash.remove(&uid).is_some();
         drop(db);
 
@@ -265,7 +263,7 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         Ok(query.execute(&db.cash))
     }
 
@@ -274,7 +272,7 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         Ok(db
             .cash
             .iter()
@@ -295,8 +293,8 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
-        get_dashboard_stats(&db.student, &db.cash).with_context(|| "获取统计信息失败")
+            .map_err(|e| Error::Poison(e.to_string()))?;
+        get_dashboard_stats(&db.student, &db.cash)
     }
 
     /// 获取学生统计信息
@@ -304,7 +302,7 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         StudentStats::calculate(&db.student, &db.cash, uid)
     }
 
@@ -313,7 +311,7 @@ impl QmxManager {
         let db = self
             .database
             .read()
-            .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
+            .map_err(|e| Error::Poison(e.to_string()))?;
         FinancialStats::calculate(&db.cash, period)
     }
 }
@@ -443,7 +441,7 @@ impl CashBuilder {
     fn build(self) -> Result<Cash> {
         let mut c = Cash::new(self.student_id);
         if self.amount == 0 {
-            return Err(anyhow::anyhow!("amount cannot be zero"));
+            return Err(Error::InvalidInput("amount cannot be zero".to_string()));
         }
         c.set_cash(self.amount);
         if let Some(n) = self.note {
@@ -557,7 +555,7 @@ impl StudentUpdater {
         let student = db
             .student_data
             .get_mut(&uid)
-            .ok_or_else(|| anyhow::anyhow!("学生不存在: {}", uid))?;
+            .ok_or_else(|| Error::NotFound(format!("学生不存在: {}", uid)))?;
 
         for update in self.updates {
             match update {
@@ -659,14 +657,14 @@ impl CashUpdater {
         let cash = db
             .cash_data
             .get_mut(&uid)
-            .ok_or_else(|| anyhow::anyhow!("现金记录不存在: {}", uid))?;
+            .ok_or_else(|| Error::NotFound(format!("现金记录不存在: {}", uid)))?;
 
         for update in self.updates {
             match update {
                 CashUpdate::StudentId(student_id) => cash.student_id = student_id,
                 CashUpdate::Amount(amount) => {
                     if amount == 0 {
-                        return Err(anyhow::anyhow!("amount cannot be zero"));
+                        return Err(Error::InvalidInput("amount cannot be zero".to_string()));
                     }
                     cash.cash = amount;
                 }
@@ -859,7 +857,7 @@ impl StudentStats {
     fn calculate(student_db: &StudentDatabase, cash_db: &CashDatabase, uid: u64) -> Result<Self> {
         let student = student_db
             .get(&uid)
-            .ok_or_else(|| anyhow::anyhow!("学生不存在: {}", uid))?;
+            .ok_or_else(|| Error::NotFound(format!("学生不存在: {}", uid)))?;
 
         let cash_records: Vec<_> = cash_db
             .iter()

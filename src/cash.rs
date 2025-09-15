@@ -4,7 +4,7 @@ use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
-use anyhow::{Context, Result};
+use crate::error::{Result, Error};
 use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -242,7 +242,7 @@ impl Database<Cash> for CashDatabase {
 impl CashDatabase {
     /// 从JSON字符串反序列化数据库
     pub fn from_json(json_str: &str) -> Result<Self> {
-        serde_json::from_str(json_str).with_context(|| "从JSON反序列化现金数据库失败")
+        serde_json::from_str(json_str).map_err(Error::from)
     }
 
     // 向后兼容性方法 - 直接委托给trait实现
@@ -353,21 +353,21 @@ impl CashDatabase {
         let installments = self.get_installments_by_plan(plan_id);
         if installments.is_empty() {
             error!("尝试生成下一期分期付款失败: 找不到计划ID {}", plan_id);
-            return Err(anyhow::anyhow!("找不到分期计划 {}", plan_id));
+            return Err(Error::NotFound(format!("找不到分期计划 {}", plan_id)));
         }
 
         let first = installments.first().expect("已检查 installments 非空");
         let installment_info = first
             .installment
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("计划ID {} 对应的记录不是分期付款记录", plan_id))?;
+            .ok_or_else(|| Error::State(format!("计划ID {} 对应的记录不是分期付款记录", plan_id)))?;
 
         // 计算当前最大期数
         let max_installment = installments
             .iter()
             .filter_map(|c| c.installment.as_ref().map(|i| i.current_installment))
             .max()
-            .ok_or_else(|| anyhow::anyhow!("计划ID {} 没有有效的分期记录", plan_id))?;
+            .ok_or_else(|| Error::State(format!("计划ID {} 没有有效的分期记录", plan_id)))?;
 
         // 检查是否已完成所有分期
         if max_installment >= installment_info.total_installments {
@@ -375,7 +375,7 @@ impl CashDatabase {
                 "尝试生成下一期分期付款失败: 计划 {} 已完成 (当前期数 {}，总期数 {})",
                 plan_id, max_installment, installment_info.total_installments
             );
-            return Err(anyhow::anyhow!("分期计划 {} 已完成", plan_id));
+            return Err(Error::State(format!("分期计划 {} 已完成", plan_id)));
         }
 
         let next_installment = max_installment + 1;
@@ -460,14 +460,14 @@ pub fn load_saved_cash_uid() -> Result<u64> {
             .inspect(|&uid| {
                 info!("成功加载CASH UID: {}", uid);
             })
-            .with_context(|| format!("解析路径为 '{}' 的CASH UID失败", &path)),
+            .map_err(Error::from),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             debug!("未找到现有的CASH UID文件，从默认值1开始");
             Ok(1)
         }
         Err(e) => {
             error!("读取CASH UID文件失败: {}", e);
-            Err(e).with_context(|| format!("读取路径为 '{}' 的CASH UID文件失败", &path))
+            Err(e).map_err(Error::from)
         }
     }
 }
@@ -476,10 +476,10 @@ pub fn load_saved_cash_uid() -> Result<u64> {
 pub fn save_uid() -> Result<()> {
     let uid = CASH_UID_COUNTER.load(Ordering::SeqCst);
     let path = format!("{}/cash_uid_counter", get_data_dir());
-    let mut file = File::create(&path).with_context(|| format!("无法创建文件 '{}'", path))?;
+    let mut file = File::create(&path).map_err(Error::from)?;
 
     file.write_all(uid.to_string().as_bytes())
-        .with_context(|| format!("写入CASH UID到文件 '{}' 失败", &path))?;
+        .map_err(Error::from)?;
     file.sync_all().ok();
     if let Some(dir) = std::path::Path::new(&path).parent() {
         if let Ok(dirf) = File::open(dir) { let _ = dirf.sync_all(); }
@@ -491,9 +491,9 @@ pub fn save_uid() -> Result<()> {
 
 /// Cash 模块初始化函数
 pub fn init() -> Result<()> {
-    std::fs::create_dir_all(get_data_dir()).with_context(|| "无法创建data目录")?;
+    std::fs::create_dir_all(get_data_dir()).map_err(Error::from)?;
 
-    let saved_uid = load_saved_cash_uid().context("初始化期间加载已保存的CASH UID失败")?;
+    let saved_uid = load_saved_cash_uid()?;
     CASH_UID_COUNTER.store(saved_uid, Ordering::SeqCst);
     info!("CASH UID计数器初始化为 {}", saved_uid);
     save_uid()?;

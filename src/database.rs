@@ -1,7 +1,7 @@
 use super::cash::CashDatabase;
 use super::student::StudentDatabase;
 
-use anyhow::{Context, Result};
+use crate::error::{Result, Error};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 /// ```rust
 /// use qmx_backend_lib::*;
 ///
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> qmx_backend_lib::error::Result<()> {
 /// // 初始化数据库
 /// let mut db = database::init()?;
 ///
@@ -79,7 +79,7 @@ impl Database {
     /// ```rust
     /// use qmx_backend_lib::*;
     ///
-    /// # fn main() -> anyhow::Result<()> {
+    /// # fn main() -> qmx_backend_lib::error::Result<()> {
     /// let db = database::init()?;
     ///
     /// // 修改数据后保存
@@ -89,10 +89,8 @@ impl Database {
     /// ```
     pub fn save(&self) -> Result<()> {
         info!("开始持久化所有数据库");
-        self.student
-            .save()
-            .with_context(|| "学生数据库持久化失败")?;
-        self.cash.save().with_context(|| "现金数据库持久化失败")?;
+        self.student.save().map_err(Error::from)?;
+        self.cash.save().map_err(Error::from)?;
         debug!("所有数据库已成功保存");
         Ok(())
     }
@@ -116,7 +114,7 @@ impl Database {
 /// ```rust
 /// use qmx_backend_lib::*;
 ///
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> qmx_backend_lib::error::Result<()> {
 /// // 初始化数据库系统
 /// let db = database::init()?;
 ///
@@ -139,7 +137,7 @@ impl Database {
 pub fn init() -> Result<Database> {
     info!("正在初始化运行时数据库");
     let data_dir = std::env::var("QMX_DATA_DIR").unwrap_or_else(|_| "./data".to_string());
-    std::fs::create_dir_all(&data_dir).with_context(|| "无法创建data目录")?;
+    std::fs::create_dir_all(&data_dir).map_err(Error::from)?;
 
     let student_db = match StudentDatabase::read_from(&format!("{}/student_database.json", data_dir)) {
         Ok(db) => {
@@ -147,19 +145,19 @@ pub fn init() -> Result<Database> {
             db
         }
         Err(e) => {
-            if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+            if let Error::Io(ref io_err) = e {
                 if io_err.kind() == std::io::ErrorKind::NotFound {
                     warn!("学生数据库文件不存在，正在创建新的数据库...");
                     let new_db = StudentDatabase::new();
-                    new_db.save().with_context(|| "无法保存新建的学生数据库")?;
+                    new_db.save().map_err(Error::from)?;
                     new_db
                 } else {
                     error!("加载学生数据库失败: {}", io_err);
-                    return Err(e).with_context(|| "加载学生数据库失败");
+                    return Err(Error::Other(format!("加载学生数据库失败: {}", io_err)));
                 }
             } else {
                 error!("加载学生数据库失败: {e:?}");
-                return Err(e).with_context(|| "加载学生数据库失败");
+                return Err(Error::Other(format!("加载学生数据库失败: {e:?}")));
             }
         }
     };
@@ -170,19 +168,19 @@ pub fn init() -> Result<Database> {
             db
         }
         Err(e) => {
-            if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+            if let Error::Io(ref io_err) = e {
                 if io_err.kind() == std::io::ErrorKind::NotFound {
                     warn!("现金数据库文件不存在，正在创建新的数据库...");
                     let new_db = CashDatabase::new();
-                    new_db.save().with_context(|| "无法保存新建的现金数据库")?;
+                    new_db.save().map_err(Error::from)?;
                     new_db
                 } else {
                     error!("加载现金数据库失败: {}", io_err);
-                    return Err(e).with_context(|| "加载现金数据库失败");
+                    return Err(Error::Other(format!("加载现金数据库失败: {}", io_err)));
                 }
             } else {
                 error!("加载现金数据库失败: {e:?}");
-                return Err(e).with_context(|| "加载现金数据库失败");
+                return Err(Error::Other(format!("加载现金数据库失败: {e:?}")));
             }
         }
     };
@@ -196,7 +194,7 @@ pub fn init() -> Result<Database> {
 pub fn init_simple() -> Result<Database> {
     info!("正在初始化运行时数据库（测试模式）");
     let data_dir = std::env::var("QMX_DATA_DIR").unwrap_or_else(|_| "./data".to_string());
-    std::fs::create_dir_all(&data_dir).with_context(|| "无法创建data目录")?;
+    std::fs::create_dir_all(&data_dir).map_err(Error::from)?;
 
     let student_db = match StudentDatabase::read_from(&format!("{}/student_database.json", data_dir)) {
         Ok(db) => {
@@ -204,19 +202,19 @@ pub fn init_simple() -> Result<Database> {
             db
         }
         Err(e) => {
-            if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+            if let Error::Io(ref io_err) = e {
                 if io_err.kind() == std::io::ErrorKind::NotFound {
                     warn!("学生数据库文件不存在，正在创建新的数据库...");
                     let new_db = StudentDatabase::new();
-                    <StudentDatabase as crate::common::Database<super::student::Student>>::save_to_simple(&new_db, &format!("{}/student_database.json", data_dir)).with_context(|| "无法保存新建的学生数据库")?;
+                    <StudentDatabase as crate::common::Database<super::student::Student>>::save_to_simple(&new_db, &format!("{}/student_database.json", data_dir)).map_err(Error::from)?;
                     new_db
                 } else {
                     error!("加载学生数据库失败: {}", io_err);
-                    return Err(e).with_context(|| "加载学生数据库失败");
+                    return Err(Error::Other(format!("加载学生数据库失败: {}", io_err)));
                 }
             } else {
                 error!("加载学生数据库失败: {e:?}");
-                return Err(e).with_context(|| "加载学生数据库失败");
+                return Err(Error::Other(format!("加载学生数据库失败: {e:?}")));
             }
         }
     };
@@ -227,7 +225,7 @@ pub fn init_simple() -> Result<Database> {
             db
         }
         Err(e) => {
-            if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+            if let Error::Io(ref io_err) = e {
                 if io_err.kind() == std::io::ErrorKind::NotFound {
                     warn!("现金数据库文件不存在，正在创建新的数据库...");
                     let new_db = CashDatabase::new();
@@ -235,15 +233,15 @@ pub fn init_simple() -> Result<Database> {
                         &new_db,
                         &format!("{}/cash_database.json", data_dir),
                     )
-                    .with_context(|| "无法保存新建的现金数据库")?;
+                    .map_err(Error::from)?;
                     new_db
                 } else {
                     error!("加载现金数据库失败: {}", io_err);
-                    return Err(e).with_context(|| "加载现金数据库失败");
+                    return Err(Error::Other(format!("加载现金数据库失败: {}", io_err)));
                 }
             } else {
                 error!("加载现金数据库失败: {e:?}");
-                return Err(e).with_context(|| "加载现金数据库失败");
+                return Err(Error::Other(format!("加载现金数据库失败: {e:?}")));
             }
         }
     };

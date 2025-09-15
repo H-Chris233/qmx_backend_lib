@@ -22,7 +22,7 @@
 //! use qmx_backend_lib::*;
 //! use chrono::{Utc, Duration};
 //!
-//! # fn main() -> anyhow::Result<()> {
+//! # fn main() -> qmx_backend_lib::error::Result<()> {
 //! // 初始化系统
 //! let mut db = init::init()?;
 //!
@@ -67,7 +67,7 @@
 //! use qmx_backend_lib::*;
 //! use chrono::{Utc, Duration};
 //!
-//! # fn main() -> anyhow::Result<()> {
+//! # fn main() -> qmx_backend_lib::error::Result<()> {
 //! // 初始化管理器
 //! let manager = QmxManager::new(true)?; // auto_save = true
 //!
@@ -121,6 +121,7 @@ pub mod manager;
 pub mod save;
 pub mod stats;
 pub mod student;
+pub mod error;
 
 // 新的统一API入口
 pub use manager::{
@@ -131,3 +132,4 @@ pub use manager::{
 // 原有API（保持向后兼容）
 pub use common::{Database, HasUid};
 pub use stats::{DashboardStats, get_dashboard_stats};
+pub use error::{Error};

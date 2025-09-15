@@ -4,7 +4,7 @@ use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
-use anyhow::{Context, Result};
+use crate::error::{Result, Error};
 use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -135,7 +135,7 @@ impl Student {
 
     pub fn update_ring_at(&mut self, index: usize, value: f64) -> Result<&mut Self> {
         if index >= self.rings.len() {
-            anyhow::bail!("分数索引越界: {}，当前长度: {}", index, self.rings.len());
+            return Err(Error::InvalidInput(format!("分数索引越界: {}，当前长度: {}", index, self.rings.len())));
         }
         let old = self.rings[index];
         self.rings[index] = value;
@@ -148,7 +148,7 @@ impl Student {
 
     pub fn remove_ring_at(&mut self, index: usize) -> Result<&mut Self> {
         if index >= self.rings.len() {
-            anyhow::bail!("分数索引越界: {}，当前长度: {}", index, self.rings.len());
+            return Err(Error::InvalidInput(format!("分数索引越界: {}，当前长度: {}", index, self.rings.len())));
         }
         let removed = self.rings.remove(index);
         info!("删除 {} 的第 {} 条成绩: {}", self.name, index, removed);
@@ -334,7 +334,7 @@ pub fn load_saved_uid() -> Result<u64> {
             let result = content
                 .trim()
                 .parse::<u64>()
-                .with_context(|| format!("解析路径为 '{}' 的UID文件失败", &path));
+                .map_err(|e| Error::InvalidInput(format!("解析路径为 '{}' 的UID文件失败: {}", &path, e)));
             match result {
                 Ok(uid) => {
                     info!("成功加载UID: {}", uid);
@@ -352,7 +352,7 @@ pub fn load_saved_uid() -> Result<u64> {
         }
         Err(e) => {
             error!("读取UID文件失败: {}", e);
-            Err(e).with_context(|| format!("读取路径为 '{}' 的UID文件失败", &path))
+            Err(e).map_err(Error::from)
         }
     }
 }
@@ -360,9 +360,9 @@ pub fn load_saved_uid() -> Result<u64> {
 pub fn save_uid() -> Result<()> {
     let uid = STUDENT_UID_COUNTER.load(Ordering::SeqCst);
     let path = format!("{}/uid_counter", get_data_dir());
-    let mut file = File::create(&path).with_context(|| format!("无法创建文件 '{}'", path))?;
+    let mut file = File::create(&path).map_err(Error::from)?;
     file.write_all(uid.to_string().as_bytes())
-        .with_context(|| format!("写入UID到文件 '{}' 失败", &path))?;
+        .map_err(Error::from)?;
     file.sync_all().ok();
     if let Some(dir) = std::path::Path::new(&path).parent() {
         if let Ok(dirf) = File::open(dir) { let _ = dirf.sync_all(); }
@@ -372,11 +372,11 @@ pub fn save_uid() -> Result<()> {
 }
 
 pub fn init() -> Result<()> {
-    std::fs::create_dir_all(get_data_dir()).with_context(|| "无法创建data目录")?;
-    let saved_uid = load_saved_uid().context("初始化期间加载已保存的UID失败")?;
+    std::fs::create_dir_all(get_data_dir()).map_err(Error::from)?;
+    let saved_uid = load_saved_uid()?;
     STUDENT_UID_COUNTER.store(saved_uid, Ordering::SeqCst);
     info!("UID计数器初始化为 {}", saved_uid);
-    save_uid().context("初始化期间保存初始UID失败")?;
+    save_uid()?;
     Ok(())
 }
 
@@ -423,7 +423,7 @@ impl Database<Student> for StudentDatabase {
 impl StudentDatabase {
     pub fn from_json(json: &str) -> Result<Self> {
         let deserialized =
-            serde_json::from_str(json).with_context(|| "反序列化JSON到学生数据库失败")?;
+            serde_json::from_str(json).map_err(Error::from)?;
         debug!("反序列化结果: {:?}", &deserialized);
         Ok(deserialized)
     }

@@ -1,6 +1,6 @@
 use crate::cash::CashDatabase;
 use crate::student::StudentDatabase;
-use anyhow::Result;
+use crate::error::Result;
 use log::info;
 
 /// 仪表板统计数据结构
@@ -21,7 +21,7 @@ use log::info;
 /// ```rust
 /// use qmx_backend_lib::*;
 ///
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> qmx_backend_lib::error::Result<()> {
 /// let db = database::init()?;
 /// let stats = get_dashboard_stats(&db.student, &db.cash)?;
 ///
@@ -63,7 +63,7 @@ pub struct DashboardStats {
 /// ```rust
 /// use qmx_backend_lib::*;
 ///
-/// # fn main() -> anyhow::Result<()> {
+/// # fn main() -> qmx_backend_lib::error::Result<()> {
 /// let mut db = database::init()?;
 ///
 /// // 添加一些测试数据
