@@ -7,6 +7,16 @@ QMX Backend Library 是一个用 Rust 编写的学生管理和财务管理库，
 **当前版本：** 2.2.0  
 **最后更新：** 2025-09-15
 
+## 🔔 重要更新 (v2.2.0)
+
+**⚠️ 注意：** v2.2.0包含重要的API行为变更，请查看 **[📋 变更说明文档](API_CHANGES_v2.2.0.md)** 了解详情。
+
+**主要变更：**
+- `Student::set_class` 方法行为变更（拆分副作用）
+- `CashBuilder::build()` 现在返回 `Result<Cash>`
+- 新增环境变量 `QMX_DATA_DIR` 支持
+- 增强的错误处理和数据一致性
+
 ---
 
 ## 📚 API 版本选择
@@ -172,6 +182,7 @@ fn hybrid_usage_example() -> anyhow::Result<()> {
 
 - **[📘 v1 API 完整文档](API_v1.md)** - 传统直接操作API
 - **[📗 v2 API 完整文档](API_v2.md)** - 现代化统一API
+- **[📋 v2.2.0 变更说明](API_CHANGES_v2.2.0.md)** - 重要变更和迁移指南
 
 ---
 

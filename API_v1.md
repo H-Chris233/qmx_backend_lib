@@ -48,6 +48,12 @@ pub struct Student {
 }
 ```
 
+### ⚠️ 重要变更 (v2.2.0+)
+
+从v2.2.0开始，`set_class`方法的行为已更改：
+- `set_class(class)` - **仅设置班级**，不再自动修改lesson_left
+- `set_class_with_lesson_init(class)` - **设置班级并自动初始化lesson_left**（保持原有行为）
+
 #### 枚举定义
 ```rust
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -80,8 +86,10 @@ pub fn new() -> Self
 pub fn set_age(&mut self, age: u8) -> &mut Self
 pub fn set_name(&mut self, name: String) -> &mut Self
 pub fn set_phone(&mut self, phone: String) -> &mut Self
-pub fn set_class(&mut self, class: Class) -> &mut Self
+pub fn set_class(&mut self, class: Class) -> &mut Self                    // 仅设置班级
+pub fn set_class_with_lesson_init(&mut self, class: Class) -> &mut Self   // 设置班级并初始化课时
 pub fn set_lesson_left(&mut self, lesson: u32) -> &mut Self
+pub fn clear_lesson_left(&mut self) -> &mut Self                         // 清空课时
 pub fn set_subject(&mut self, subject: Subject) -> &mut Self
 pub fn set_note(&mut self, note: String) -> &mut Self
 pub fn add_ring(&mut self, ring: f64) -> &mut Self
@@ -449,7 +457,7 @@ fn main() -> anyhow::Result<()> {
     student
         .set_name("张三".to_string())
         .set_age(18)
-        .set_class(Class::TenTry)
+        .set_class_with_lesson_init(Class::TenTry)  // 自动设置10课时
         .set_subject(Subject::Shooting)
         .add_ring(9.5)
         .set_membership_dates(
