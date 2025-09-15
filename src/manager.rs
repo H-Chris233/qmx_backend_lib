@@ -476,6 +476,12 @@ enum StudentUpdate {
     RemoveRingAt(usize),
 }
 
+impl Default for StudentUpdater {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StudentUpdater {
     pub fn new() -> Self {
         Self {
@@ -608,6 +614,12 @@ enum CashUpdate {
     Installment(Option<Installment>),
 }
 
+impl Default for CashUpdater {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CashUpdater {
     pub fn new() -> Self {
         Self {
@@ -670,6 +682,12 @@ enum StudentFilter {
     Subject(Subject),
     HasMembership(bool),
     MembershipActive(DateTime<Utc>),
+}
+
+impl Default for StudentQuery {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StudentQuery {
@@ -749,6 +767,12 @@ enum CashFilter {
     AmountRange(i64, i64),
     HasInstallment(bool),
     DateRange(DateTime<Utc>, DateTime<Utc>),
+}
+
+impl Default for CashQuery {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CashQuery {
