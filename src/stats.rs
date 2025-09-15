@@ -20,8 +20,9 @@ pub fn get_dashboard_stats(
     info!("开始计算仪表盘统计数据");
     let mut total_revenue = 0;
     let mut total_expense = 0;
-    let mut all_scores = Vec::new();
     let mut max_score = 0.0;
+    let mut total_score_sum = 0.0;
+    let mut total_score_count = 0;
 
     let total_students = student_db.len();
     let mut class_types = std::collections::HashSet::new();
@@ -29,7 +30,8 @@ pub fn get_dashboard_stats(
     for (_, student) in student_db.iter() {
         class_types.insert(format!("{:?}", student.class()));
         for &score in student.rings() {
-            all_scores.push(score);
+            total_score_sum += score;
+            total_score_count += 1;
             if score > max_score {
                 max_score = score;
             }
@@ -49,11 +51,10 @@ pub fn get_dashboard_stats(
         }
     }
 
-    let average_score = if all_scores.is_empty() {
+    let average_score = if total_score_count == 0 {
         0.0
     } else {
-        let sum: f64 = all_scores.iter().sum();
-        sum / all_scores.len() as f64
+        total_score_sum / total_score_count as f64
     };
 
     let stats = DashboardStats {

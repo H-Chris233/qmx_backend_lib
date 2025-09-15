@@ -278,13 +278,8 @@ impl QmxManager {
         Ok(db
             .cash
             .iter()
-            .filter_map(|(_, c)| {
-                if c.student_id == Some(student_id) {
-                    Some(c.clone())
-                } else {
-                    None
-                }
-            })
+            .filter(|(_, c)| c.student_id == Some(student_id))
+            .map(|(_, c)| c.clone())
             .collect())
     }
 }
@@ -716,9 +711,7 @@ impl StudentQuery {
 
     fn execute(self, db: &StudentDatabase) -> Vec<Student> {
         db.iter()
-            .map(|(_, s)| s.clone())
-            .into_iter()
-            .filter(|student| {
+            .filter(|(_, student)| {
                 self.filters.iter().all(|filter| match filter {
                     StudentFilter::Name(name) => student.name().contains(name),
                     StudentFilter::AgeRange(min, max) => {
@@ -741,6 +734,7 @@ impl StudentQuery {
                     }
                 })
             })
+            .map(|(_, s)| s.clone())
             .collect()
     }
 }
@@ -786,9 +780,7 @@ impl CashQuery {
 
     fn execute(self, db: &CashDatabase) -> Vec<Cash> {
         db.iter()
-            .map(|(_, c)| c.clone())
-            .into_iter()
-            .filter(|cash| {
+            .filter(|(_, cash)| {
                 self.filters.iter().all(|filter| match filter {
                     CashFilter::StudentId(id) => cash.student_id == Some(*id),
                     CashFilter::AmountRange(min, max) => cash.cash >= *min && cash.cash <= *max,
@@ -798,6 +790,7 @@ impl CashQuery {
                     }
                 })
             })
+            .map(|(_, c)| c.clone())
             .collect()
     }
 }
@@ -832,13 +825,8 @@ impl StudentStats {
 
         let cash_records: Vec<_> = cash_db
             .iter()
-            .filter_map(|(_, c)| {
-                if c.student_id == Some(uid) {
-                    Some(c)
-                } else {
-                    None
-                }
-            })
+            .filter(|(_, c)| c.student_id == Some(uid))
+            .map(|(_, c)| c)
             .collect();
         let total_payments: i64 = cash_records.iter().map(|c| c.cash).sum();
         let payment_count = cash_records.len();
@@ -900,17 +888,24 @@ pub enum TimePeriod {
 
 impl FinancialStats {
     fn calculate(cash_db: &CashDatabase, _period: TimePeriod) -> Result<Self> {
-        let all_cash: Vec<_> = cash_db.iter().map(|(_, c)| c.clone()).collect();
+        let mut total_income: i64 = 0;
+        let mut total_expense: i64 = 0;
+        let mut transaction_count = 0;
+        let mut installment_count = 0;
 
-        let total_income: i64 = all_cash.iter().filter(|c| c.cash > 0).map(|c| c.cash).sum();
-        let total_expense: i64 = all_cash
-            .iter()
-            .filter(|c| c.cash < 0)
-            .map(|c| c.cash.abs())
-            .sum();
+        for (_, cash) in cash_db.iter() {
+            transaction_count += 1;
+            if cash.cash > 0 {
+                total_income += cash.cash;
+            } else {
+                total_expense += cash.cash.abs();
+            }
+            if cash.installment.is_some() {
+                installment_count += 1;
+            }
+        }
+        
         let net_income = total_income - total_expense;
-        let transaction_count = all_cash.len();
-        let installment_count = all_cash.iter().filter(|c| c.installment.is_some()).count();
 
         Ok(Self {
             total_income,

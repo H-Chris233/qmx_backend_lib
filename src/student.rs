@@ -71,20 +71,18 @@ impl Student {
     }
 
     pub fn set_name(&mut self, name: String) -> &mut Self {
-        let old_name = self.name.clone();
+        info!("名称从 '{}' 改为 '{}'", self.name, name);
         self.name = name;
-        info!("名称从 '{}' 改为 '{}'", old_name, self.name);
         self
     }
 
     pub fn set_class(&mut self, class: Class) -> &mut Self {
-        let old_class = self.class.clone();
+        debug!("班级从 {:?} 改为 {:?}", self.class, class);
         self.lesson_left = match class {
             Class::TenTry => Some(10),
             _ => None,
         };
         self.class = class;
-        debug!("班级从 {:?} 改为 {:?}", old_class, self.class);
         self
     }
 
