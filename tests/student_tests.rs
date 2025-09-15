@@ -94,14 +94,14 @@ mod student_comprehensive_tests {
     fn student_class_and_lesson_left_interaction() {
         let mut student = Student::new();
 
-        student.set_class(Class::TenTry);
+        student.set_class_with_lesson_init(Class::TenTry);
         assert_eq!(student.class(), &Class::TenTry);
         assert_eq!(student.lesson_left(), Some(10));
 
         student.set_lesson_left(5);
         assert_eq!(student.lesson_left(), Some(5));
 
-        student.set_class(Class::Month);
+        student.set_class_with_lesson_init(Class::Month);
         assert_eq!(student.class(), &Class::Month);
         assert_eq!(student.lesson_left(), None);
 
@@ -118,7 +118,7 @@ mod student_comprehensive_tests {
     #[test]
     fn student_lesson_left_boundaries() {
         let mut student = Student::new();
-        student.set_class(Class::TenTry);
+        student.set_class_with_lesson_init(Class::TenTry);
 
         student.set_lesson_left(0);
         assert_eq!(student.lesson_left(), Some(0));
@@ -225,7 +225,7 @@ mod student_comprehensive_tests {
             .set_age(25)
             .set_name("Chain Test".to_string())
             .set_phone("12345678901".to_string())
-            .set_class(Class::TenTry)
+            .set_class_with_lesson_init(Class::TenTry)
             .set_lesson_left(8)
             .set_subject(Subject::Shooting)
             .set_note("Chained operations".to_string())
