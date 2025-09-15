@@ -196,7 +196,7 @@ impl QmxManager {
             .database
             .read()
             .map_err(|e| anyhow::anyhow!("获取数据库读锁失败: {}", e))?;
-        Ok(db.student.iter().map(|(_, s)| s.clone()).collect())
+        Ok(db.student.iter().map(|(_, s)| s).cloned().collect())
     }
 }
 
@@ -211,7 +211,7 @@ impl QmxManager {
             .database
             .write()
             .map_err(|e| anyhow::anyhow!("获取数据库写锁失败: {}", e))?;
-        let cash = builder.build();
+        let cash = builder.build()?;
         let uid = cash.uid;
         db.cash.insert(cash);
         drop(db);
@@ -279,7 +279,8 @@ impl QmxManager {
             .cash
             .iter()
             .filter(|(_, c)| c.student_id == Some(student_id))
-            .map(|(_, c)| c.clone())
+            .map(|(_, c)| c)
+            .cloned()
             .collect())
     }
 }
@@ -388,7 +389,7 @@ impl StudentBuilder {
             s.set_phone(phone);
         }
         if let Some(class) = self.class {
-            s.set_class(class);
+            s.set_class_with_lesson_init(class);
         }
         if let Some(subject) = self.subject {
             s.set_subject(subject);
@@ -439,8 +440,11 @@ impl CashBuilder {
         self
     }
 
-    fn build(self) -> Cash {
+    fn build(self) -> Result<Cash> {
         let mut c = Cash::new(self.student_id);
+        if self.amount == 0 {
+            return Err(anyhow::anyhow!("amount cannot be zero"));
+        }
         c.set_cash(self.amount);
         if let Some(n) = self.note {
             c.set_note(Some(n));
@@ -448,7 +452,7 @@ impl CashBuilder {
         if let Some(inst) = self.installment {
             c.installment = Some(inst);
         }
-        c
+        Ok(c)
     }
 }
 
@@ -567,15 +571,19 @@ impl StudentUpdater {
                     student.set_phone(phone);
                 }
                 StudentUpdate::Class(class) => {
-                    student.set_class(class);
+                    student.set_class_with_lesson_init(class);
                 }
                 StudentUpdate::Subject(subject) => {
                     student.set_subject(subject);
                 }
                 StudentUpdate::LessonLeft(lessons) => {
-                    if let Some(v) = lessons {
-                        student.set_lesson_left(v);
-                    }
+                    match lessons {
+                        Some(v) => student.set_lesson_left(v),
+                        None => {
+                            student.clear_lesson_left();
+                            &mut *student
+                        }
+                    };
                 }
                 StudentUpdate::Note(note) => {
                     student.set_note(note);
@@ -656,7 +664,12 @@ impl CashUpdater {
         for update in self.updates {
             match update {
                 CashUpdate::StudentId(student_id) => cash.student_id = student_id,
-                CashUpdate::Amount(amount) => cash.cash = amount,
+                CashUpdate::Amount(amount) => {
+                    if amount == 0 {
+                        return Err(anyhow::anyhow!("amount cannot be zero"));
+                    }
+                    cash.cash = amount;
+                }
                 CashUpdate::Note(note) => cash.note = note,
                 CashUpdate::Installment(installment) => cash.installment = installment,
             }
@@ -752,7 +765,8 @@ impl StudentQuery {
                     }
                 })
             })
-            .map(|(_, s)| s.clone())
+            .map(|(_, s)| s)
+            .cloned()
             .collect()
     }
 }
@@ -911,21 +925,54 @@ pub enum TimePeriod {
 }
 
 impl FinancialStats {
-    fn calculate(cash_db: &CashDatabase, _period: TimePeriod) -> Result<Self> {
+    fn calculate(cash_db: &CashDatabase, period: TimePeriod) -> Result<Self> {
+        use chrono::{Duration, Datelike};
+        
+        let (start_time, end_time) = match period {
+            TimePeriod::Today => {
+                let now = Utc::now();
+                let start = now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
+                let end = now.date_naive().and_hms_opt(23, 59, 59).unwrap().and_utc();
+                (start, end)
+            }
+            TimePeriod::ThisWeek => {
+                let now = Utc::now();
+                let days_from_monday = now.weekday().num_days_from_monday();
+                let start = (now - Duration::days(days_from_monday as i64)).date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
+                let end = now;
+                (start, end)
+            }
+            TimePeriod::ThisMonth => {
+                let now = Utc::now();
+                let start = now.date_naive().with_day(1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
+                let end = now;
+                (start, end)
+            }
+            TimePeriod::ThisYear => {
+                let now = Utc::now();
+                let start = now.date_naive().with_month(1).unwrap().with_day(1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
+                let end = now;
+                (start, end)
+            }
+            TimePeriod::Custom { start, end } => (start, end),
+        };
+
         let mut total_income: i64 = 0;
         let mut total_expense: i64 = 0;
         let mut transaction_count = 0;
         let mut installment_count = 0;
 
         for (_, cash) in cash_db.iter() {
-            transaction_count += 1;
-            if cash.cash > 0 {
-                total_income += cash.cash;
-            } else {
-                total_expense += cash.cash.abs();
-            }
-            if cash.installment.is_some() {
-                installment_count += 1;
+            if cash.created_at >= start_time && cash.created_at <= end_time {
+                transaction_count += 1;
+                if cash.cash > 0 {
+                    total_income += cash.cash;
+                } else {
+                    total_expense += cash.cash.abs();
+                }
+                if cash.installment.is_some() {
+                    installment_count += 1;
+                }
             }
         }
 

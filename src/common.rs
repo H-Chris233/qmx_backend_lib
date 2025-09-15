@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use log::{debug, info, warn};
+use log::{debug, info};
 use serde::{Serialize, de::DeserializeOwned};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -120,15 +120,13 @@ where
     where
         Self: Serialize,
     {
-        serde_json::to_string(self).unwrap_or_else(|e| {
-            log::error!("序列化{}数据库失败: {}", self.type_name(), e);
-            // 返回错误信息而不是 panic
-            format!(
-                "{{\"error\": \"序列化{}数据库失败: {}\"}}",
-                self.type_name(),
-                e
-            )
-        })
+        match serde_json::to_string(self) {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("序列化{}数据库失败: {}", self.type_name(), e);
+                String::new()
+            }
+        }
     }
 
     /// 从JSON字符串反序列化
@@ -196,67 +194,34 @@ where
             }
         }
 
-        let tmp_path = format!("{}.tmp", path);
+        let mut tmpfile = tempfile::NamedTempFile::new_in(
+            std::path::Path::new(path)
+                .parent()
+                .ok_or_else(|| anyhow::anyhow!("无效的保存路径: {}", path))?,
+        )?;
 
-        // 尝试删除可能存在的旧临时文件
-        let _ = std::fs::remove_file(&tmp_path);
-
-        let file =
-            File::create(&tmp_path).with_context(|| format!("无法创建临时文件 '{}'", tmp_path))?;
-        let mut writer = BufWriter::new(file);
-
-        serde_json::to_writer(&mut writer, self).with_context(|| {
+        serde_json::to_writer(&mut tmpfile, self).with_context(|| {
             format!(
-                "序列化并写入{}数据库到临时文件 '{}' 失败",
-                self.type_name(),
-                tmp_path
+                "序列化并写入{}数据库到临时文件失败",
+                self.type_name()
             )
         })?;
 
-        writer
-            .flush()
-            .with_context(|| format!("刷新写入到临时文件 '{}' 失败", tmp_path))?;
+        tmpfile.flush()?;
+        tmpfile.as_file().sync_all()?;
 
-        // 显式关闭文件句柄
-        drop(writer);
-
-        // 尝试原子重命名，如果失败则回退到直接写入
-        match std::fs::rename(&tmp_path, path) {
-            Ok(_) => {
-                debug!("成功原子保存{}数据库到 {}", self.type_name(), path);
-            }
-            Err(rename_err) => {
-                warn!("原子重命名失败，尝试回退到直接写入: {}", rename_err);
-
-                // 回退方案：读取临时文件内容，直接写入目标文件
-                match std::fs::read(&tmp_path) {
-                    Ok(content) => {
-                        std::fs::write(path, content)
-                            .with_context(|| format!("直接写入目标文件 '{}' 失败", path))?;
-
-                        let _ = std::fs::remove_file(&tmp_path); // 忽略删除错误
-                        debug!("通过直接写入方式保存{}数据库到 {}", self.type_name(), path);
-                    }
-                    Err(read_err) => {
-                        warn!("读取临时文件失败: {}，尝试重新序列化", read_err);
-
-                        // 最后的回退方案：重新序列化直接写入
-                        let serialized = serde_json::to_vec(self)
-                            .with_context(|| format!("重新序列化{}数据库失败", self.type_name()))?;
-
-                        std::fs::write(path, serialized)
-                            .with_context(|| format!("最终写入目标文件 '{}' 失败", path))?;
-
-                        let _ = std::fs::remove_file(&tmp_path); // 忽略删除错误
-                        debug!(
-                            "通过重新序列化方式保存{}数据库到 {}",
-                            self.type_name(),
-                            path
-                        );
-                    }
-                }
+        let target_path = std::path::Path::new(path);
+        if let Some(dir) = target_path.parent() {
+            if let Ok(dir_fd) = std::fs::File::open(dir) {
+                let _ = dir_fd.sync_all();
             }
         }
+
+        tmpfile
+            .persist(path)
+            .map_err(|e| anyhow::anyhow!("持久化临时文件失败: {}", e.error))?;
+
+        debug!("成功原子保存{}数据库到 {}", self.type_name(), path);
 
         Ok(())
     }

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -11,6 +12,14 @@ use serde::{Deserialize, Serialize};
 use crate::common::{Database, HasUid};
 
 pub static STUDENT_UID_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+static DATA_DIR: OnceLock<String> = OnceLock::new();
+
+fn get_data_dir() -> &'static str {
+    DATA_DIR.get_or_init(|| {
+        std::env::var("QMX_DATA_DIR").unwrap_or_else(|_| "./data".to_string())
+    })
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Student {
@@ -78,6 +87,12 @@ impl Student {
 
     pub fn set_class(&mut self, class: Class) -> &mut Self {
         debug!("班级从 {:?} 改为 {:?}", self.class, class);
+        self.class = class;
+        self
+    }
+
+    pub fn set_class_with_lesson_init(&mut self, class: Class) -> &mut Self {
+        debug!("班级从 {:?} 改为 {:?}", self.class, class);
         self.lesson_left = match class {
             Class::TenTry => Some(10),
             _ => None,
@@ -97,6 +112,12 @@ impl Student {
             "剩余课时从 {} 改为 {}，对象: {}",
             old_value, lesson, self.name
         );
+        self
+    }
+
+    pub fn clear_lesson_left(&mut self) -> &mut Self {
+        self.lesson_left = None;
+        info!("清除{}的剩余课时", self.name);
         self
     }
 
@@ -307,13 +328,13 @@ impl HasUid for Student {
 }
 
 pub fn load_saved_uid() -> Result<u64> {
-    let path = "./data/uid_counter";
-    match std::fs::read_to_string(path) {
+    let path = format!("{}/uid_counter", get_data_dir());
+    match std::fs::read_to_string(&path) {
         Ok(content) => {
             let result = content
                 .trim()
                 .parse::<u64>()
-                .with_context(|| format!("解析路径为 '{}' 的UID文件失败", path));
+                .with_context(|| format!("解析路径为 '{}' 的UID文件失败", &path));
             match result {
                 Ok(uid) => {
                     info!("成功加载UID: {}", uid);
@@ -331,23 +352,27 @@ pub fn load_saved_uid() -> Result<u64> {
         }
         Err(e) => {
             error!("读取UID文件失败: {}", e);
-            Err(e).with_context(|| format!("读取路径为 '{}' 的UID文件失败", path))
+            Err(e).with_context(|| format!("读取路径为 '{}' 的UID文件失败", &path))
         }
     }
 }
 
 pub fn save_uid() -> Result<()> {
     let uid = STUDENT_UID_COUNTER.load(Ordering::SeqCst);
-    let path = "./data/uid_counter";
-    let mut file = File::create(path).with_context(|| format!("无法创建文件 '{}'", path))?;
+    let path = format!("{}/uid_counter", get_data_dir());
+    let mut file = File::create(&path).with_context(|| format!("无法创建文件 '{}'", path))?;
     file.write_all(uid.to_string().as_bytes())
-        .with_context(|| format!("写入UID到文件 '{}' 失败", path))?;
+        .with_context(|| format!("写入UID到文件 '{}' 失败", &path))?;
+    file.sync_all().ok();
+    if let Some(dir) = std::path::Path::new(&path).parent() {
+        if let Ok(dirf) = File::open(dir) { let _ = dirf.sync_all(); }
+    }
     debug!("成功将UID: {} 保存到文件", uid);
     Ok(())
 }
 
 pub fn init() -> Result<()> {
-    std::fs::create_dir_all("./data").with_context(|| "无法创建data目录")?;
+    std::fs::create_dir_all(get_data_dir()).with_context(|| "无法创建data目录")?;
     let saved_uid = load_saved_uid().context("初始化期间加载已保存的UID失败")?;
     STUDENT_UID_COUNTER.store(saved_uid, Ordering::SeqCst);
     info!("UID计数器初始化为 {}", saved_uid);
@@ -376,6 +401,7 @@ impl Database<Student> for StudentDatabase {
     }
 
     fn default_path(&self) -> &'static str {
+        // Note: This returns a static str but uses dynamic path - will be addressed later
         "./data/student_database.json"
     }
 
