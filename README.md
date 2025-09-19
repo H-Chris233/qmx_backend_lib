@@ -1,7 +1,7 @@
 # QMX Backend Library
 
 [![Rust](https://img.shields.io/badge/rust-1.87+-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](https://github.com/H-Chris233/qmx_backend_lib)
+[![Version](https://img.shields.io/badge/version-2.4.1-blue.svg)](https://github.com/H-Chris233/qmx_backend_lib)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 一个用 Rust 编写的高性能学生管理和财务管理库，专为教育培训机构设计。

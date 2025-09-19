@@ -162,7 +162,7 @@ pub fn init() -> Result<Database> {
         }
     };
 
-    let cash_db = match CashDatabase::read_from("./data/cash_database.json") {
+    let cash_db = match CashDatabase::read_from(&format!("{}/cash_database.json", data_dir)) {
         Ok(db) => {
             info!("现金数据库加载成功");
             db
