@@ -693,6 +693,7 @@ enum StudentFilter {
     Subject(Subject),
     HasMembership(bool),
     MembershipActive(DateTime<Utc>),
+    ScoreRange(f64, f64),
 }
 
 impl Default for StudentQuery {
@@ -738,6 +739,11 @@ impl StudentQuery {
         self
     }
 
+    pub fn score_range(mut self, min: f64, max: f64) -> Self {
+        self.filters.push(StudentFilter::ScoreRange(min, max));
+        self
+    }
+
     fn execute(self, db: &StudentDatabase) -> Vec<Student> {
         db.iter()
             .filter(|(_, student)| {
@@ -760,6 +766,10 @@ impl StudentQuery {
                         } else {
                             false
                         }
+                    }
+                    StudentFilter::ScoreRange(min, max) => {
+                        // Check if any of the student's scores (rings) fall within the range
+                        student.rings().iter().any(|&score| score >= *min && score <= *max)
                     }
                 })
             })

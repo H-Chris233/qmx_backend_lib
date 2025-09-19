@@ -593,7 +593,91 @@ mod student_uid_management_tests {
 }
 
 #[cfg(test)]
-mod student_file_operations_tests {
+mod student_query_tests {
+    use super::*;
+    use qmx_backend_lib::{StudentQuery, StudentBuilder, Class, Subject};
+    use chrono::{Utc, Duration};
+
+    #[test]
+    fn student_query_score_range() {
+        // Create students with different ring scores
+        let mut student1 = Student::new();
+        student1.set_name("Student 1".to_string());
+        student1.add_ring(8.5);
+        student1.add_ring(9.0);
+
+        let mut student2 = Student::new();
+        student2.set_name("Student 2".to_string());
+        student2.add_ring(7.5);
+        student2.add_ring(8.0);
+
+        let mut student3 = Student::new();
+        student3.set_name("Student 3".to_string());
+        student3.add_ring(9.5);
+        student3.add_ring(10.0);
+
+        // Create a database with these students
+        let mut db = StudentDatabase::new();
+        db.insert(student1);
+        db.insert(student2);
+        db.insert(student3);
+
+        // Test score range query
+        let query = StudentQuery::new().score_range(8.0, 9.0);
+        let results = query.execute(&db);
+        
+        // Should match student1 (has 8.5 and 9.0) and student2 (has 8.0)
+        assert_eq!(results.len(), 2);
+        
+        // Verify the students in the results
+        let names: Vec<&str> = results.iter().map(|s| s.name()).collect();
+        assert!(names.contains(&"Student 1"));
+        assert!(names.contains(&"Student 2"));
+        assert!(!names.contains(&"Student 3")); // Should not include student3 (9.5 and 10.0 are outside range)
+    }
+
+    #[test]
+    fn student_query_score_range_edge_cases() {
+        // Create students with edge case scores
+        let mut student1 = Student::new();
+        student1.set_name("Student 1".to_string());
+        student1.add_ring(8.0); // Exactly at the lower bound
+
+        let mut student2 = Student::new();
+        student2.set_name("Student 2".to_string());
+        student2.add_ring(9.0); // Exactly at the upper bound
+
+        let mut student3 = Student::new();
+        student3.set_name("Student 3".to_string());
+        student3.add_ring(7.9); // Just below the lower bound
+        student3.add_ring(9.1); // Just above the upper bound
+
+        let mut student4 = Student::new();
+        student4.set_name("Student 4".to_string());
+        // No rings added - should not match any range query
+
+        // Create a database with these students
+        let mut db = StudentDatabase::new();
+        db.insert(student1);
+        db.insert(student2);
+        db.insert(student3);
+        db.insert(student4);
+
+        // Test score range query with exact bounds
+        let query = StudentQuery::new().score_range(8.0, 9.0);
+        let results = query.execute(&db);
+        
+        // Should match student1 (8.0), student2 (9.0), and student3 (has both 7.9 and 9.1, one of which is in range)
+        assert_eq!(results.len(), 3);
+        
+        // Verify the students in the results
+        let names: Vec<&str> = results.iter().map(|s| s.name()).collect();
+        assert!(names.contains(&"Student 1"));
+        assert!(names.contains(&"Student 2"));
+        assert!(names.contains(&"Student 3"));
+        assert!(!names.contains(&"Student 4")); // Should not include student4 (no rings)
+    }
+}
     use super::*;
     use std::fs;
 
