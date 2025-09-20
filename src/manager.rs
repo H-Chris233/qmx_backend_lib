@@ -334,10 +334,10 @@ pub struct StudentBuilder {
 }
 
 impl StudentBuilder {
-    pub fn new(name: impl Into<String>, age: Option<u8>) -> Self {
+    pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
-            age,
+            age: None,
             phone: None,
             class: None,
             subject: None,
@@ -365,6 +365,11 @@ impl StudentBuilder {
 
     pub fn lesson_left(mut self, lessons: u32) -> Self {
         self.lesson_left = Some(lessons);
+        self
+    }
+
+    pub fn age(mut self, age: u8) -> Self {
+        self.age = Some(age);
         self
     }
 

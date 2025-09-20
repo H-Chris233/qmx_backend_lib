@@ -44,19 +44,27 @@ if let Some(age_value) = student.age() {
 ### StudentBuilder 和 StudentUpdater API 变更
 
 **变更内容：** 
-- `StudentBuilder::new(name, age)` 的第二个参数从 `u8` 更改为 `Option<u8>`
+- `StudentBuilder::new(name, age)` 的签名从 `new(name: impl Into<String>, age: Option<u8>)` 更改为 `new(name: impl Into<String>)`
+- 新增 `StudentBuilder::age(age: u8)` 方法用于链式设置年龄
 - `StudentUpdater::age(age)` 的参数从 `u8` 更改为 `Option<u8>`
+
+**变更原因：**
+- 统一API设计模式，使所有字段都通过链式调用方式设置
+- 提高API的一致性和易用性
+- 避免构造函数参数列表过长
 
 **迁移示例：**
 
 ```rust
 // 旧代码 (v2.4.1 及之前)
-let builder = StudentBuilder::new("张三", 18);
+let builder = StudentBuilder::new("张三", Some(18));
 let updater = StudentUpdater::new().age(19);
 
 // 新代码 (v2.5.0+)
-let builder = StudentBuilder::new("张三", Some(18));  // 或者 None 表示未知年龄
-let updater = StudentUpdater::new().age(Some(19));   // 或者 None 表示清除年龄
+let builder = StudentBuilder::new("张三").age(18);  // 设置具体年龄
+let builder = StudentBuilder::new("李四");          // 不设置年龄（保持None）
+let updater = StudentUpdater::new().age(Some(19));  // 设置具体年龄
+let updater = StudentUpdater::new().age(None);      // 清除年龄信息
 ```
 
 ### Student::set_age 方法变更
@@ -91,6 +99,7 @@ student.set_age(None);      // 清除年龄信息
 - `v2_api_tests.rs` - 更新了V2 API测试用例
 - `v1_api_tests.rs` - 更新了V1 API测试用例
 - `enhanced_tests.rs` - 更新了增强测试用例
+- `atomic_write_fix_tests.rs` - 更新了原子写入测试用例
 
 ---
 
@@ -99,6 +108,8 @@ student.set_age(None);      // 清除年龄信息
 1. **迁移策略：** 建议在代码中逐步替换所有对年龄字段的使用，确保正确处理 `Option<u8>` 类型
 2. **空值处理：** 在业务逻辑中明确处理年龄未知的情况
 3. **向后兼容：** 此变更为破坏性变更，需要相应地更新所有依赖此库的代码
+4. **API一致性：** 建议使用新的链式调用模式设置所有学生属性，以保持代码风格的一致性
+5. **可读性提升：** 新的API模式使代码更具可读性，每个属性的设置都清晰明确
 
 ---
 

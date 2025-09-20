@@ -154,8 +154,8 @@ mod performance_tests {
                 .create_student(
                     StudentBuilder::new(
                         format!("Performance_Student_{}", i),
-                        Some(((i % 80) + 10) as u8),
                     )
+                    .age(((i % 80) + 10) as u8)
                     .lesson_left((i % 50) + 1),
                 )
                 .unwrap();
@@ -320,7 +320,7 @@ mod integration_tests {
         // 1. 创建学生
         let student_uid = manager
             .create_student(
-                StudentBuilder::new("张三", Some(25))
+                StudentBuilder::new("张三").age(25)
                     .phone("138-0013-8000")
                     .class(Class::Month)
                     .subject(Subject::Archery)
@@ -396,7 +396,7 @@ mod integration_tests {
         for (name, age, class, subject, lessons) in student_configs {
             let uid = manager
                 .create_student(
-                    StudentBuilder::new(name, Some(age))
+                    StudentBuilder::new(name).age(age)
                         .class(class)
                         .subject(subject)
                         .lesson_left(lessons),
@@ -466,8 +466,7 @@ mod integration_tests {
             let handle = thread::spawn(move || {
                 let result = manager_clone.create_student(StudentBuilder::new(
                     format!("并发学生_{}", i),
-                    Some(20 + (i % 50) as u8),
-                ));
+                ).age(20 + (i % 50) as u8));
                 result.unwrap()
             });
             handles.push(handle);
@@ -581,7 +580,7 @@ mod stress_tests {
         for i in 0..500 {
             let uid = manager
                 .create_student(
-                    StudentBuilder::new(format!("Query_Test_Student_{}", i),                         Some(((i % 80) + 10) as u8),)
+                    StudentBuilder::new(format!("Query_Test_Student_{}", i)).age(((i % 80) + 10) as u8)
                         .class(match i % 4 {
                             0 => Class::TenTry,
                             1 => Class::Month,

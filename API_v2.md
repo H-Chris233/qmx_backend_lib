@@ -12,7 +12,7 @@ QMX Backend Library v2 提供了全新的统一API入口 `QmxManager`，采用�
 **⚠️ 破坏性变更：** v2.5.0 对 Student.age 字段进行了重构，从 `u8` 类型更改为 `Option<u8>` 类型。
 
 这是一项破坏性变更，影响以下API：
-- `StudentBuilder::new(name, age)` - age 参数类型从 `u8` 更改为 `Option<u8>`
+- `StudentBuilder::new(name)` - 移除了age参数，新增 `age(age: u8)` 链式方法
 - `StudentUpdater::age(age)` - age 参数类型从 `u8` 更改为 `Option<u8>`
 - `Student::set_age(age)` - age 参数类型从 `u8` 更改为 `Option<u8>`
 - `Student::age()` - 返回类型从 `u8` 更改为 `Option<u8>`
@@ -80,7 +80,8 @@ let manager = QmxManager::new(true)?;
 
 // 基础创建
 let uid = manager.create_student(
-    StudentBuilder::new("张三", Some(18))
+    StudentBuilder::new("张三")
+        .age(18)
         .phone("13800138000")
         .class(Class::TenTry)
         .subject(Subject::Shooting)
@@ -94,7 +95,7 @@ let uid = manager.create_student(
 
 // 最简创建
 let uid = manager.create_student(
-    StudentBuilder::new("李四", Some(16))
+    StudentBuilder::new("李四").age(16)
 )?;
 ```
 
@@ -503,7 +504,7 @@ fn student_management_example() -> anyhow::Result<()> {
     
     // 1. 创建学生
     let uid = manager.create_student(
-        StudentBuilder::new("王小明", 17)
+        StudentBuilder::new("王小明").age(17)
             .phone("13700137000")
             .class(Class::Month)
             .subject(Subject::Archery)
@@ -605,7 +606,7 @@ fn score_management_example() -> anyhow::Result<()> {
     
     // 1. 创建学生
     let uid = manager.create_student(
-        StudentBuilder::new("射击学员", 18)
+        StudentBuilder::new("射击学员").age(18)
             .class(Class::TenTry)
             .subject(Subject::Shooting)
     )?;
@@ -670,7 +671,7 @@ fn membership_management_example() -> anyhow::Result<()> {
     
     // 1. 创建会员学生
     let uid = manager.create_student(
-        StudentBuilder::new("VIP学员", 20)
+        StudentBuilder::new("VIP学员").age(20)
             .class(Class::Year)
             .membership(
                 Utc::now(),
@@ -732,7 +733,7 @@ fn concurrent_example() -> anyhow::Result<()> {
         let manager_clone = Arc::clone(&manager);
         let handle = thread::spawn(move || {
             let uid = manager_clone.create_student(
-                StudentBuilder::new(format!("学生{}", i), 18)
+                StudentBuilder::new(format!("学生{}", i)).age(18)
             ).unwrap();
             
             manager_clone.record_cash(
@@ -775,7 +776,7 @@ fn error_handling_example() -> anyhow::Result<()> {
         .context("初始化管理器失败")?;
     
     let uid = manager.create_student(
-        StudentBuilder::new("测试学生", 18)
+        StudentBuilder::new("测试学生").age(18)
     ).with_context(|| "创建学生失败")?;
     
     manager.update_student(uid, 
@@ -897,7 +898,7 @@ let manager = QmxManager::new(true)?;
 
 | v1 操作 | v2 等效操作 |
 |---------|-------------|
-| `Student::new()` | `StudentBuilder::new(name, age)` |
+| `Student::new()` | `StudentBuilder::new(name).age(age)` |
 | `student.set_name()` | `StudentUpdater::new().name()` |
 | `db.student.insert()` | `manager.create_student()` |
 | `db.student.get()` | `manager.get_student()` |
@@ -914,7 +915,7 @@ fn mixed_usage_example() -> anyhow::Result<()> {
     // v2 API
     let manager = QmxManager::new(true)?;
     let uid = manager.create_student(
-        StudentBuilder::new("新学员", 18)
+        StudentBuilder::new("新学员").age(18)
     )?;
     
     // v1 API（仍然可用）
@@ -935,7 +936,7 @@ fn mixed_usage_example() -> anyhow::Result<()> {
 ```rust
 // ✅ 推荐：使用链式调用
 let uid = manager.create_student(
-    StudentBuilder::new("张三", 18)
+    StudentBuilder::new("张三").age(18)
         .phone("13800138000")
         .class(Class::TenTry)
         .note("新学员")
@@ -943,7 +944,7 @@ let uid = manager.create_student(
 
 // ✅ 推荐：最简创建
 let uid = manager.create_student(
-    StudentBuilder::new("李四", 16)
+    StudentBuilder::new("李四").age(16)
 )?;
 ```
 
