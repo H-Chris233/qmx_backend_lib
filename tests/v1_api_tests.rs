@@ -16,12 +16,12 @@ mod student_v1_tests {
         let mut student = Student::new();
         student
             .set_name("张三".to_string())
-            .set_age(18)
+            .set_age(Some(18))
             .set_class(Class::TenTry)
             .set_subject(Subject::Shooting);
 
         assert_eq!(student.name(), "张三");
-        assert_eq!(student.age(), 18);
+        assert_eq!(student.age(), Some(18));
         assert_eq!(student.class(), &Class::TenTry);
         assert_eq!(student.subject(), &Subject::Shooting);
     }
@@ -31,7 +31,7 @@ mod student_v1_tests {
         let mut db = StudentDatabase::new();
 
         let mut student = Student::new();
-        student.set_name("李四".to_string()).set_age(20);
+        student.set_name("李四".to_string()).set_age(Some(20));
         let uid = student.uid();
 
         db.insert(student);
@@ -39,7 +39,7 @@ mod student_v1_tests {
 
         let retrieved = db.get(&uid).unwrap();
         assert_eq!(retrieved.name(), "李四");
-        assert_eq!(retrieved.age(), 20);
+        assert_eq!(retrieved.age(), Some(20));
 
         let removed = db.remove(&uid);
         assert!(removed.is_some());
@@ -263,7 +263,7 @@ fn test_v1_api_integration() {
     let mut student = Student::new();
     student
         .set_name("集成测试学生".to_string())
-        .set_age(19)
+        .set_age(Some(19))
         .set_class(Class::Month)
         .set_subject(Subject::Archery)
         .add_ring(88.0)

@@ -4,8 +4,20 @@
 
 QMX Backend Library v2 提供了全新的统一API入口 `QmxManager`，采用现代化的设计模式，包括Builder模式、Updater模式和Query Builder模式，提供更加直观和易用的开发体验。
 
-**版本：** 2.4.1  
-**最后更新：** 2025-09-19
+**版本：** 2.5.0  
+**最后更新：** 2025-09-20
+
+## 🔔 v2.5.0 重要更新
+
+**⚠️ 破坏性变更：** v2.5.0 对 Student.age 字段进行了重构，从 `u8` 类型更改为 `Option<u8>` 类型。
+
+这是一项破坏性变更，影响以下API：
+- `StudentBuilder::new(name, age)` - age 参数类型从 `u8` 更改为 `Option<u8>`
+- `StudentUpdater::age(age)` - age 参数类型从 `u8` 更改为 `Option<u8>`
+- `Student::set_age(age)` - age 参数类型从 `u8` 更改为 `Option<u8>`
+- `Student::age()` - 返回类型从 `u8` 更改为 `Option<u8>`
+
+详细信息请参阅 [v2.5.0 变更说明文档](API_CHANGES_v2.5.0.md)。
 
 ## 新特性 (v2.0.0)
 
@@ -68,7 +80,7 @@ let manager = QmxManager::new(true)?;
 
 // 基础创建
 let uid = manager.create_student(
-    StudentBuilder::new("张三", 18)
+    StudentBuilder::new("张三", Some(18))
         .phone("13800138000")
         .class(Class::TenTry)
         .subject(Subject::Shooting)
@@ -82,14 +94,14 @@ let uid = manager.create_student(
 
 // 最简创建
 let uid = manager.create_student(
-    StudentBuilder::new("李四", 16)
+    StudentBuilder::new("李四", Some(16))
 )?;
 ```
 
 #### StudentBuilder API
 ```rust
 impl StudentBuilder {
-    pub fn new(name: impl Into<String>, age: u8) -> Self
+    pub fn new(name: impl Into<String>, age: Option<u8>) -> Self
     pub fn phone(self, phone: impl Into<String>) -> Self
     pub fn class(self, class: Class) -> Self
     pub fn subject(self, subject: Subject) -> Self
@@ -147,7 +159,7 @@ manager.update_student(uid,
 impl StudentUpdater {
     pub fn new() -> Self
     pub fn name(self, name: impl Into<String>) -> Self
-    pub fn age(self, age: u8) -> Self
+    pub fn age(self, age: Option<u8>) -> Self
     pub fn phone(self, phone: impl Into<String>) -> Self
     pub fn class(self, class: Class) -> Self                              // 使用set_class_with_lesson_init
     pub fn subject(self, subject: Subject) -> Self
@@ -966,5 +978,5 @@ match manager.get_student(uid)? {
 
 ---
 
-*文档版本：2.4.0*  
+*文档版本：2.5.0*  
 *最后更新：2025-09-15*

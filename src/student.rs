@@ -24,7 +24,7 @@ fn get_data_dir() -> &'static str {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Student {
     uid: u64,
-    age: u8,
+    age: Option<u8>,
     name: String,
     phone: String,
     lesson_left: Option<u32>,
@@ -57,7 +57,7 @@ impl Student {
         let uid = STUDENT_UID_COUNTER.fetch_add(1, Ordering::SeqCst);
         let new_student = Self {
             uid,
-            age: 0,
+            age: None,
             name: "未填写".to_string(),
             phone: "未填写".to_string(),
             lesson_left: None,
@@ -72,10 +72,15 @@ impl Student {
         new_student
     }
 
-    pub fn set_age(&mut self, age: u8) -> &mut Self {
+    pub fn set_age(&mut self, age: Option<u8>) -> &mut Self {
         let old_age = self.age;
         self.age = age;
-        debug!("年龄从 {} 更新到 {}，对象: {}", old_age, age, self.name);
+        match (&old_age, &self.age) {
+            (Some(old), Some(new)) => debug!("年龄从 {} 更新到 {}，对象: {}", old, new, self.name),
+            (Some(old), None) => debug!("年龄从 {} 清除，对象: {}", old, self.name),
+            (None, Some(new)) => debug!("年龄设置为 {}，对象: {}", new, self.name),
+            (None, None) => debug!("年龄保持为空，对象: {}", self.name),
+        }
         self
     }
 
@@ -281,7 +286,7 @@ impl Student {
     pub fn uid(&self) -> u64 {
         self.uid
     }
-    pub fn age(&self) -> u8 {
+    pub fn age(&self) -> Option<u8> {
         self.age
     }
     pub fn name(&self) -> &str {

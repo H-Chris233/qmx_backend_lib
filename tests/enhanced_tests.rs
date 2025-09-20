@@ -52,8 +52,8 @@ mod error_handling_tests {
         let mut student = Student::new();
 
         // 测试极端年龄值
-        student.set_age(255); // u8::MAX
-        assert_eq!(student.age(), 255);
+        student.set_age(Some(255)); // u8::MAX
+        assert_eq!(student.age(), Some(255));
 
         // 测试极端lesson_left值 - 需要先设置为TenTry班级才能设置课时
         assert_eq!(student.lesson_left(), None);
@@ -154,7 +154,7 @@ mod performance_tests {
                 .create_student(
                     StudentBuilder::new(
                         format!("Performance_Student_{}", i),
-                        ((i % 80) + 10) as u8,
+                        Some(((i % 80) + 10) as u8),
                     )
                     .lesson_left((i % 50) + 1),
                 )
@@ -186,7 +186,7 @@ mod performance_tests {
             .map(|i| {
                 let mut student = Student::new();
                 student.set_name(format!("Batch_Student_{}", i));
-                student.set_age(((i % 100) + 10) as u8);
+                student.set_age(Some((i % 100) as u8));
                 student.set_lesson_left((i % 30) + 1);
 
                 // 添加一些分数
@@ -210,7 +210,13 @@ mod performance_tests {
         let query_start = std::time::Instant::now();
         let filtered_students: Vec<_> = db
             .iter()
-            .filter(|(_, s)| s.age() > 50 && s.lesson_left().unwrap_or(0) > 15)
+            .filter(|(_, s)| {
+                if let Some(age) = s.age() {
+                    age > 50 && s.lesson_left().unwrap_or(0) > 15
+                } else {
+                    false
+                }
+            })
             .collect();
         let query_duration = query_start.elapsed();
 
@@ -237,7 +243,7 @@ mod performance_tests {
                 "Serialization_Test_Student_{}_with_long_name_containing_unicode_测试",
                 i
             ));
-            student.set_age((i % 100) as u8);
+            student.set_age(Some((i % 100) as u8));
             student.set_phone(format!(
                 "+86-{:04}-{:04}-{:04}",
                 i % 1000,
@@ -314,7 +320,7 @@ mod integration_tests {
         // 1. 创建学生
         let student_uid = manager
             .create_student(
-                StudentBuilder::new("张三", 25)
+                StudentBuilder::new("张三", Some(25))
                     .phone("138-0013-8000")
                     .class(Class::Month)
                     .subject(Subject::Archery)
@@ -331,7 +337,7 @@ mod integration_tests {
         let update_result = manager.update_student(
             student_uid,
             StudentUpdater::new()
-                .age(26)
+                .age(Some(26))
                 .class(Class::TenTry) // 设置为TenTry才能有lesson_left
                 .add_ring(8.5)
                 .add_ring(9.0)
@@ -366,7 +372,7 @@ mod integration_tests {
 
         // 7. 验证学生更新
         let updated_student = manager.get_student(student_uid).unwrap().unwrap();
-        assert_eq!(updated_student.age(), 26);
+        assert_eq!(updated_student.age(), Some(26));
         assert_eq!(updated_student.class(), &Class::TenTry);
         assert_eq!(updated_student.lesson_left(), Some(18));
         assert_eq!(updated_student.rings().len(), 3);
@@ -390,7 +396,7 @@ mod integration_tests {
         for (name, age, class, subject, lessons) in student_configs {
             let uid = manager
                 .create_student(
-                    StudentBuilder::new(name, age)
+                    StudentBuilder::new(name, Some(age))
                         .class(class)
                         .subject(subject)
                         .lesson_left(lessons),
@@ -441,7 +447,7 @@ mod integration_tests {
         for &uid in &student_uids {
             let student = manager.get_student(uid).unwrap().unwrap();
             assert!(!student.name().is_empty());
-            assert!(student.age() > 0);
+            assert!(if let Some(age) = student.age() { age > 0 } else { false });
         }
     }
 
@@ -460,7 +466,7 @@ mod integration_tests {
             let handle = thread::spawn(move || {
                 let result = manager_clone.create_student(StudentBuilder::new(
                     format!("并发学生_{}", i),
-                    20 + (i % 50) as u8,
+                    Some(20 + (i % 50) as u8),
                 ));
                 result.unwrap()
             });
@@ -575,7 +581,7 @@ mod stress_tests {
         for i in 0..500 {
             let uid = manager
                 .create_student(
-                    StudentBuilder::new(format!("Query_Test_Student_{}", i), ((i % 80) + 10) as u8)
+                    StudentBuilder::new(format!("Query_Test_Student_{}", i),                         Some(((i % 80) + 10) as u8),)
                         .class(match i % 4 {
                             0 => Class::TenTry,
                             1 => Class::Month,

@@ -323,7 +323,7 @@ impl QmxManager {
 /// 学生构建器 - 使用构建器模式创建学生
 pub struct StudentBuilder {
     name: String,
-    age: u8,
+    age: Option<u8>,
     phone: Option<String>,
     class: Option<Class>,
     subject: Option<Subject>,
@@ -334,7 +334,7 @@ pub struct StudentBuilder {
 }
 
 impl StudentBuilder {
-    pub fn new(name: impl Into<String>, age: u8) -> Self {
+    pub fn new(name: impl Into<String>, age: Option<u8>) -> Self {
         Self {
             name: name.into(),
             age,
@@ -382,7 +382,9 @@ impl StudentBuilder {
     fn build(self) -> Student {
         let mut s = Student::new();
         s.set_name(self.name);
-        s.set_age(self.age);
+        if let Some(age) = self.age {
+            s.set_age(Some(age));
+        }
         if let Some(phone) = self.phone {
             s.set_phone(phone);
         }
@@ -465,7 +467,7 @@ pub struct StudentUpdater {
 
 enum StudentUpdate {
     Name(String),
-    Age(u8),
+    Age(Option<u8>),
     Phone(String),
     Class(Class),
     Subject(Subject),
@@ -496,7 +498,7 @@ impl StudentUpdater {
         self
     }
 
-    pub fn age(mut self, age: u8) -> Self {
+    pub fn age(mut self, age: Option<u8>) -> Self {
         self.updates.push(StudentUpdate::Age(age));
         self
     }
@@ -750,7 +752,11 @@ impl StudentQuery {
                 self.filters.iter().all(|filter| match filter {
                     StudentFilter::Name(name) => student.name().contains(name),
                     StudentFilter::AgeRange(min, max) => {
-                        student.age() >= *min && student.age() <= *max
+                        if let Some(age) = student.age() {
+                            age >= *min && age <= *max
+                        } else {
+                            false // 如果年龄为空，则不匹配任何范围
+                        }
                     }
                     StudentFilter::Class(class) => student.class() == class,
                     StudentFilter::Subject(subject) => student.subject() == subject,

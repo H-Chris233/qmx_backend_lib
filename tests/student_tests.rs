@@ -34,7 +34,7 @@ mod student_comprehensive_tests {
     fn student_default_values() {
         let student = Student::new();
 
-        assert_eq!(student.age(), 0);
+        assert_eq!(student.age(), None);
         assert_eq!(student.name(), "未填写");
         assert_eq!(student.phone(), "未填写");
         assert_eq!(student.lesson_left(), None);
@@ -48,14 +48,20 @@ mod student_comprehensive_tests {
     fn student_age_boundaries() {
         let mut student = Student::new();
 
-        student.set_age(0);
-        assert_eq!(student.age(), 0);
+        student.set_age(Some(0));
+        assert_eq!(student.age(), Some(0));
 
-        student.set_age(255);
-        assert_eq!(student.age(), 255);
+        student.set_age(Some(255));
+        assert_eq!(student.age(), Some(255));
 
-        student.set_age(18);
-        assert_eq!(student.age(), 18);
+        student.set_age(Some(18));
+        assert_eq!(student.age(), Some(18));
+
+        student.set_age(None);
+        assert_eq!(student.age(), None);
+
+        student.set_age(None);
+        assert_eq!(student.age(), None);
     }
 
     #[test]
@@ -222,7 +228,7 @@ mod student_comprehensive_tests {
         let mut student = Student::new();
 
         student
-            .set_age(25)
+            .set_age(Some(25))
             .set_name("Chain Test".to_string())
             .set_phone("12345678901".to_string())
             .set_class_with_lesson_init(Class::TenTry)
@@ -232,7 +238,7 @@ mod student_comprehensive_tests {
             .add_ring(9.0)
             .add_ring(8.5);
 
-        assert_eq!(student.age(), 25);
+        assert_eq!(student.age(), Some(25));
         assert_eq!(student.name(), "Chain Test");
         assert_eq!(student.phone(), "12345678901");
         assert_eq!(student.class(), &Class::TenTry);
@@ -359,15 +365,19 @@ mod student_database_comprehensive_tests {
 
         for i in 0..5 {
             let mut student = Student::new();
-            student.set_age(20 + i as u8);
+            student.set_age(Some(20 + i as u8));
             uids.push(student.uid());
             db.insert(student);
         }
 
         let update_count = db.update_batch(&uids, |student| {
-            if student.age() < 23 {
-                student.set_age(student.age() + 10);
-                true
+            if let Some(age) = student.age() {
+                if age < 23 {
+                    student.set_age(Some(age + 10));
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
             }
@@ -375,11 +385,11 @@ mod student_database_comprehensive_tests {
 
         assert_eq!(update_count, 3);
 
-        assert_eq!(db.get(&uids[0]).unwrap().age(), 30);
-        assert_eq!(db.get(&uids[1]).unwrap().age(), 31);
-        assert_eq!(db.get(&uids[2]).unwrap().age(), 32);
-        assert_eq!(db.get(&uids[3]).unwrap().age(), 23);
-        assert_eq!(db.get(&uids[4]).unwrap().age(), 24);
+        assert_eq!(db.get(&uids[0]).unwrap().age(), Some(30));
+        assert_eq!(db.get(&uids[1]).unwrap().age(), Some(31));
+        assert_eq!(db.get(&uids[2]).unwrap().age(), Some(32));
+        assert_eq!(db.get(&uids[3]).unwrap().age(), Some(23));
+        assert_eq!(db.get(&uids[4]).unwrap().age(), Some(24));
 
         let no_update_count = db.update_batch(&[9999, 10000], |_| true);
         assert_eq!(no_update_count, 0);
@@ -394,7 +404,7 @@ mod student_database_comprehensive_tests {
         let mut student = Student::new();
         student
             .set_name("JSON Test".to_string())
-            .set_age(30)
+            .set_age(Some(30))
             .add_ring(9.5)
             .add_ring(8.0);
 
@@ -410,7 +420,7 @@ mod student_database_comprehensive_tests {
 
         let retrieved = deserialized_db.get(&student.uid()).unwrap();
         assert_eq!(retrieved.name(), "JSON Test");
-        assert_eq!(retrieved.age(), 30);
+        assert_eq!(retrieved.age(), Some(30));
         assert_eq!(retrieved.rings().len(), 2);
     }
 
@@ -672,7 +682,7 @@ mod student_file_operations_tests {
 
         let mut db = StudentDatabase::new();
         let mut student = Student::new();
-        student.set_name("Save Test".to_string()).set_age(25);
+        student.set_name("Save Test".to_string()).set_age(Some(25));
         db.insert(student.clone());
 
         let save_result = db.save_to(test_path);

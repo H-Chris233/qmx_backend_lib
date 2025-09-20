@@ -33,7 +33,7 @@ fn test_improved_atomic_write() {
 
     // 创建一些数据
     let student_id = manager
-        .create_student(StudentBuilder::new("测试学生", 20))
+        .create_student(StudentBuilder::new("测试学生", Some(20)))
         .unwrap();
 
     let _cash_id = manager
@@ -77,7 +77,7 @@ fn test_database_operations_with_improved_save() {
         .unwrap();
 
         let student_id = manager
-            .create_student(StudentBuilder::new("持久化测试", 25))
+            .create_student(StudentBuilder::new("持久化测试", Some(25)))
             .unwrap();
 
         let _cash_id = manager

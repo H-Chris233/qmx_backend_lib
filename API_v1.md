@@ -4,8 +4,8 @@
 
 QMX Backend Library v1 是一个用 Rust 编写的学生管理和财务管理库，提供完整的学生信息管理、现金流记录、分期付款处理和统计分析功能。
 
-**版本：** 2.4.1  
-**最后更新：** 2025-09-19
+**版本：** 2.5.0  
+**最后更新：** 2025-09-20
 
 ## 特性
 
@@ -14,6 +14,12 @@ QMX Backend Library v1 是一个用 Rust 编写的学生管理和财务管理库
 - 🛠️ **优化API设计** - 更符合Rust最佳实践
 - 👥 **会员管理系统** - 完整的会员期限管理功能
 - 🔒 **向后兼容性** - 现有代码无需修改
+
+## ⚠️ 重要变更 (v2.5.0)
+
+**破坏性变更：** v2.5.0 对 Student.age 字段进行了重构，从 `u8` 类型更改为 `Option<u8>` 类型。
+
+这是一项破坏性变更，需要相应地更新所有使用该字段的代码。详细信息请参阅 [v2.5.0 变更说明文档](API_CHANGES_v2.5.0.md)。
 
 ## 模块结构
 
@@ -35,7 +41,7 @@ QMX Backend Library v1 是一个用 Rust 编写的学生管理和财务管理库
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Student {
     uid: u64,                                    // 唯一标识符（自动生成）
-    age: u8,                                     // 年龄（0-255）
+    age: Option<u8>,                             // 年龄（0-255，可选）
     name: String,                                // 姓名
     phone: String,                               // 电话号码
     lesson_left: Option<u32>,                    // 剩余课时（仅TenTry班级有效）
@@ -79,11 +85,11 @@ pub enum Subject {
 pub fn new() -> Self
 ```
 - 自动生成递增UID
-- 默认值：`age=0`, `name/phone="未填写"`, `class/subject=Others`
+- 默认值：`age=None`, `name/phone="未填写"`, `class/subject=Others`
 
 #### 基本信息设置（链式调用）
 ```rust
-pub fn set_age(&mut self, age: u8) -> &mut Self
+pub fn set_age(&mut self, age: Option<u8>) -> &mut Self
 pub fn set_name(&mut self, name: String) -> &mut Self
 pub fn set_phone(&mut self, phone: String) -> &mut Self
 pub fn set_class(&mut self, class: Class) -> &mut Self                    // 仅设置班级
@@ -109,7 +115,7 @@ pub fn membership_days_remaining(&self) -> Option<i64>        // 获取剩余天
 #### 字段获取方法
 ```rust
 pub fn uid(&self) -> u64
-pub fn age(&self) -> u8
+pub fn age(&self) -> Option<u8>
 pub fn name(&self) -> &str
 pub fn phone(&self) -> &str
 pub fn lesson_left(&self) -> Option<u32>

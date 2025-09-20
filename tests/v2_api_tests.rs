@@ -43,7 +43,7 @@ mod qmx_manager_tests {
         // 先创建一些数据文件
         let initial_manager = QmxManager::new(true).unwrap();
         let _student_id = initial_manager
-            .create_student(StudentBuilder::new("初始学生", 18).class(Class::TenTry))
+            .create_student(StudentBuilder::new("初始学生", Some(18)).class(Class::TenTry))
             .unwrap();
 
         // 从路径加载
@@ -76,7 +76,7 @@ mod student_builder_tests {
 
         let student_id = manager
             .create_student(
-                StudentBuilder::new("张三", 16)
+                StudentBuilder::new("张三", Some(16))
                     .phone("13800138000")
                     .class(Class::TenTry)
                     .subject(Subject::Shooting)
@@ -86,7 +86,7 @@ mod student_builder_tests {
 
         let student = manager.get_student(student_id).unwrap().unwrap();
         assert_eq!(student.name(), "张三");
-        assert_eq!(student.age(), 16);
+        assert_eq!(student.age(), Some(16));
         assert_eq!(student.phone(), "13800138000");
         assert_eq!(student.class(), &Class::TenTry);
         assert_eq!(student.subject(), &Subject::Shooting);
@@ -108,7 +108,7 @@ mod student_builder_tests {
         let end = start + Duration::days(365);
 
         let student_id = manager
-            .create_student(StudentBuilder::new("会员学生", 20).membership(start, end))
+            .create_student(StudentBuilder::new("会员学生", Some(20)).membership(start, end))
             .unwrap();
 
         let student = manager.get_student(student_id).unwrap().unwrap();
@@ -129,12 +129,12 @@ mod student_builder_tests {
         let manager = QmxManager::new(true).unwrap();
 
         let student_id = manager
-            .create_student(StudentBuilder::new("最小学生", 15))
+            .create_student(StudentBuilder::new("最小学生", Some(15)))
             .unwrap();
 
         let student = manager.get_student(student_id).unwrap().unwrap();
         assert_eq!(student.name(), "最小学生");
-        assert_eq!(student.age(), 15);
+        assert_eq!(student.age(), Some(15));
         assert_eq!(student.phone(), "未填写");
         assert_eq!(student.class(), &Class::Others);
         assert_eq!(student.subject(), &Subject::Others);
@@ -156,14 +156,14 @@ mod student_updater_tests {
         let manager = QmxManager::new(true).unwrap();
 
         let student_id = manager
-            .create_student(StudentBuilder::new("更新测试", 16))
+            .create_student(StudentBuilder::new("更新测试", Some(16)))
             .unwrap();
 
         manager
             .update_student(
                 student_id,
                 StudentUpdater::new()
-                    .age(17)
+                                        .age(Some(17))
                     .phone("新电话")
                     .class(Class::Month)
                     .note("更新后的备注"),
@@ -171,7 +171,7 @@ mod student_updater_tests {
             .unwrap();
 
         let student = manager.get_student(student_id).unwrap().unwrap();
-        assert_eq!(student.age(), 17);
+        assert_eq!(student.age(), Some(17));
         assert_eq!(student.phone(), "新电话");
         assert_eq!(student.class(), &Class::Month);
         assert_eq!(student.note(), "更新后的备注");
@@ -189,7 +189,7 @@ mod student_updater_tests {
         let manager = QmxManager::new(true).unwrap();
 
         let student_id = manager
-            .create_student(StudentBuilder::new("成绩测试", 18))
+            .create_student(StudentBuilder::new("成绩测试", Some(18)))
             .unwrap();
 
         // 添加单个成绩
@@ -234,7 +234,7 @@ mod student_updater_tests {
         let manager = QmxManager::new(true).unwrap();
 
         let student_id = manager
-            .create_student(StudentBuilder::new("会员更新", 19))
+            .create_student(StudentBuilder::new("会员更新", Some(19)))
             .unwrap();
 
         let start = Utc::now();
@@ -268,7 +268,7 @@ mod cash_builder_tests {
         let manager = QmxManager::new(true).unwrap();
 
         let student_id = manager
-            .create_student(StudentBuilder::new("现金测试", 18))
+            .create_student(StudentBuilder::new("现金测试", Some(18)))
             .unwrap();
 
         let cash_id = manager
@@ -322,22 +322,32 @@ mod student_query_tests {
         let manager = QmxManager::new(true).unwrap();
 
         // 创建不同年龄的学生
-        manager
-            .create_student(StudentBuilder::new("学生A", 15))
+        let _id1 = manager
+            .create_student(StudentBuilder::new("学生1", Some(15)))
             .unwrap();
-        manager
-            .create_student(StudentBuilder::new("学生B", 17))
+        let _id2 = manager
+            .create_student(StudentBuilder::new("学生2", Some(18)))
             .unwrap();
-        manager
-            .create_student(StudentBuilder::new("学生C", 20))
+        let _id3 = manager
+            .create_student(StudentBuilder::new("学生3", Some(22)))
+            .unwrap();
+        let _id4 = manager
+            .create_student(StudentBuilder::new("学生4", None)) // 年龄为空的学生
             .unwrap();
 
+        // 查询年龄在16-20之间的学生
         let students = manager
-            .search_students(StudentQuery::new().age_range(16, 18))
+            .search_students(StudentQuery::new().age_range(16, 20))
             .unwrap();
-
         assert_eq!(students.len(), 1);
-        assert_eq!(students[0].name(), "学生B");
+        assert_eq!(students[0].name(), "学生2");
+        assert_eq!(students[0].age(), Some(18));
+
+        // 查询年龄在15-22之间的学生（应该包含3个有年龄的学生）
+        let students = manager
+            .search_students(StudentQuery::new().age_range(15, 22))
+            .unwrap();
+        assert_eq!(students.len(), 3); // 不包括年龄为空的学生
     }
 
     #[test]
@@ -353,7 +363,7 @@ mod student_query_tests {
 
         manager
             .create_student(
-                StudentBuilder::new("TenTry射击", 16)
+                StudentBuilder::new("TenTry射击", Some(16))
                     .class(Class::TenTry)
                     .subject(Subject::Shooting),
             )
@@ -361,7 +371,7 @@ mod student_query_tests {
 
         manager
             .create_student(
-                StudentBuilder::new("Month射箭", 17)
+                StudentBuilder::new("Month射箭", Some(17))
                     .class(Class::Month)
                     .subject(Subject::Archery),
             )
@@ -369,7 +379,7 @@ mod student_query_tests {
 
         manager
             .create_student(
-                StudentBuilder::new("TenTry射箭", 18)
+                StudentBuilder::new("TenTry射箭", Some(18))
                     .class(Class::TenTry)
                     .subject(Subject::Archery),
             )
@@ -412,12 +422,12 @@ mod student_query_tests {
 
         // 有会员的学生
         manager
-            .create_student(StudentBuilder::new("会员学生", 18).membership(start, end))
+            .create_student(StudentBuilder::new("会员学生", Some(18)).membership(start, end))
             .unwrap();
 
         // 无会员的学生
         manager
-            .create_student(StudentBuilder::new("普通学生", 19))
+            .create_student(StudentBuilder::new("普通学生", Some(19)))
             .unwrap();
 
         let members = manager
@@ -455,10 +465,10 @@ mod cash_query_tests {
         let manager = QmxManager::new(true).unwrap();
 
         let student1_id = manager
-            .create_student(StudentBuilder::new("学生1", 18))
+            .create_student(StudentBuilder::new("学生1", Some(18)))
             .unwrap();
         let student2_id = manager
-            .create_student(StudentBuilder::new("学生2", 19))
+            .create_student(StudentBuilder::new("学生2", Some(19)))
             .unwrap();
 
         manager
@@ -528,7 +538,7 @@ mod statistics_tests {
 
         // 创建学生和现金记录
         let student_id = manager
-            .create_student(StudentBuilder::new("统计学生", 18))
+            .create_student(StudentBuilder::new("统计学生", Some(18)))
             .unwrap();
 
         manager
@@ -569,7 +579,7 @@ mod statistics_tests {
         let end = start + Duration::days(30);
 
         let student_id = manager
-            .create_student(StudentBuilder::new("详细统计", 20).membership(start, end))
+            .create_student(StudentBuilder::new("详细统计", Some(20)).membership(start, end))
             .unwrap();
 
         manager
@@ -641,7 +651,7 @@ mod crud_operations_tests {
 
         // Create
         let student_id = manager
-            .create_student(StudentBuilder::new("CRUD测试", 18).class(Class::TenTry))
+            .create_student(StudentBuilder::new("CRUD测试", Some(18)).class(Class::TenTry))
             .unwrap();
 
         // Read
@@ -652,13 +662,13 @@ mod crud_operations_tests {
         manager
             .update_student(
                 student_id,
-                StudentUpdater::new().name("更新后的名字").age(19),
+                StudentUpdater::new().name("更新后的名字").age(Some(19)),
             )
             .unwrap();
 
         let updated_student = manager.get_student(student_id).unwrap().unwrap();
         assert_eq!(updated_student.name(), "更新后的名字");
-        assert_eq!(updated_student.age(), 19);
+        assert_eq!(updated_student.age(), Some(19));
 
         // Delete
         let deleted = manager.delete_student(student_id).unwrap();
@@ -728,7 +738,7 @@ fn test_v2_api_integration() {
     // 1. 创建学生（使用构建器）
     let student_id = manager
         .create_student(
-            StudentBuilder::new("集成测试学生", 19)
+            StudentBuilder::new("集成测试学生", Some(19))
                 .phone("13800138000")
                 .class(Class::Month)
                 .subject(Subject::Archery)
